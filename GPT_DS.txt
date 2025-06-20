@@ -1,0 +1,1669 @@
+Stardew Valley Modlama: Özel Konulara Detaylı
+ Bakış
+ SMAPI API Referansı
+ Stardew Valley’nin SMAPI API’si mod geliştiricilere birçok kolaylık sağlar. Bu API’nin temel bileşenleri
+ arasında mod manifestosu, etkinlik sistemi (events), konfigürasyon dosyaları, içerik yükleme/
+ düzenleme araçları, veri depolama, girdi işlemleri, loglama, reflection ile gizli özelliklere erişim, 
+çoklu oyuncu desteği, çeviri desteği ve mod güncelleme kontrolü bulunur . Her modun
+ manifest.json dosyası bulunur ve bu dosyada modun benzersiz kimliği (UniqueID), adı, yazarı,
+ sürümü, uyumluluk bilgileri gibi tanımlayıcı bilgiler yer alır. Manifesto ayrıca modun bağımlılıklarını ve
+ otomatik güncelleme için Nexus ID’sini tanımlayabilir. Bu sayede SMAPI, modun doğru yüklenip
+ yüklenmediğini ve güncellemelerini takip edebilir.
+ 1
+ SMAPI Etkinlikleri (Events): Oyun içinde gerçekleşen olaylara modunuzun tepki vermesini sağlar.
+ Örneğin, bir gün başladığında kod çalıştırmak isterseniz 
+GameLoop.DayStarted etkinliğine bir event
+ handler ekleyebilirsiniz. Genelde bu tür event abonelikleri modunuzun 
+Entry metodunda yapılır.
+ Aşağıda, her yeni gün başladığında bir mesaj yazdıran basit bir örnek yer alıyor :
+ 2
+ public override void Entry(IModHelper helper)
+ {
+ helper.Events.GameLoop.DayStarted += this.OnDayStarted;
+ }
+ 3
+ private void OnDayStarted(object sender, DayStartedEventArgs e)
+ {
+ this.Monitor.Log("Yeni bir gün doğdu!", LogLevel.Info);
+ }
+ Bu örnekte 
+DayStarted etkinliği yakalandığında 
+OnDayStarted metodu çağrılır ve SMAPI
+ konsolunda bir mesaj belirir. SMAPI’nin etkinlik sistemi, oyun döngüsü her kare yenilendiğinde
+ (Stardew Valley saniyede 60 kare çalışır) uygun olayları tetikler. Örneğin 
+oyun karesinde çağrılabilirken, 
+UpdateTicked etkinliği her
+ MenuChanged gibi bir etkinlik yalnızca oyun menüsü açılıp
+ kapandığında tetiklenir. Mod etkinlikleri senkronize olarak çalıştığı için (her seferinde bir mod olayı
+ işler), kodunuzun performansına dikkat etmelisiniz. Özellikle sık çağrılan etkinliklerde (ör. her tick
+ çalışan) ağır işlemleri önceden hesaplayıp önbelleğe almak iyi bir pratiktir .
+ 4
+ Konfigürasyon Dosyaları: Modlar genellikle oyuncuların tercihlerine göre davranış değiştirmesi için bir
+ config.json kullanır. SMAPI, 
+helper.ReadConfig ve 
+helper.WriteConfig metodlarıyla JSON
+ formatındaki ayarları kolayca yükleyip kaydetmenize olanak tanır . Bu sayede oyuncu, mod
+ klasöründeki config dosyasını düzenleyerek oyun içi özellikleri (örneğin zorluk, hız, renk seçenekleri vb.)
+ 5
+ kolayca ayarlayabilir. İyi bir yaklaşım, konfigürasyon için bir C# sınıfı (örn. 
+Entry içinde bu config’i yüklemek ve mod çalışırken bu ayarları kullanmaktır.
+ ModConfig ) tanımlayıp
+ 1
+İçerik Yükleme ve Düzenleme: SMAPI, oyun varlıklarını (görseller, haritalar, veri dosyaları) yüklemek
+ veya değiştirmek için basit bir içerik API’si sağlar. 
+helper.Content.Load<AssetType>("Assets/
+ path.png") ile modunuza ait dosyaları yükleyebilir veya 
+helper.Content.Patching ile oyun
+ içeriğini geçici olarak değiştirebilirsiniz. Örneğin, Content Patcher gibi çerçeveler bu sistemi kullanarak
+ Data/Objects veya harita dosyalarını modlama sırasında değiştirir. SMAPI 3.0+ ile gelen Content
+ API, oyun başlarken XNB yerine doğrudan JSON içeriklerini ve görüntüleri yükleyebilmenize olanak tanır.
+ Ayrıca SMAPI’nin içerik etkinlikleri (
+ AssetRequested vb.) ile, bir varlık yüklenirken modunuzun araya
+ 6
+ 7
+ girip o içeriği değiştirmesini sağlayabilirsiniz . Örneğin, özel bir balık eklemek için 
+yüklenirken SMAPI’ye kendi verinizi eklemesini söyleyebilirsiniz.
+ Data/Fish
+ Veri Depolama: Modlar, kalıcı verilerini saklamak için SMAPI’nin sağladığı mod veri deposunu
+ kullanabilir. Örneğin 
+helper.Data.WriteSaveData("key", obj) ile bir sınıf örneğinizi mevcut
+ kayıt dosyasına bağlı olarak kaydedebilir, sonraki yüklemelerde 
+ReadSaveData ile geri alabilirsiniz. Bu,
+ modlar için kullanışlıdır çünkü her oyuncu kaydına özel veriler (örneğin bir modun oyuncuya özel
+ ilerleme 
+8
+ durumu) tutabilirsiniz . Ayrıca modlar arası veri paylaşımı isterseniz,
+ helper.Data.WriteGlobalData gibi metodlarla tüm kayıtlar genelinde veya diğer modlarla ortak
+ anahtarlar üzerinde veri depolamak da mümkün.
+ 9
+ Girdi İşleme: SMAPI, oyuncu girdisini (klavye, fare, oyun kumandası) yakalamak ve gerektiğinde
+ engellemek için API sunar . Örneğin, belirli bir tuşa basıldığında bir eylem gerçekleştirmek isterseniz
+ helper.Events.Input.ButtonPressed etkinliğini dinleyebilirsiniz. Bu etkinlik tetiklendiğinde hangi
+ tuşa basıldığı bilgisini alıp, eşleşen tuş sizin modunuzla ilişkiliyse kendi işlevinizi çağırabilirsiniz. Girdiyi
+ engellemek (örneğin bir menü açıkken oyun içi kısayolları devre dışı bırakmak) isterseniz, SMAPI’nin
+ ICursor veya düşük seviye input API’larını kullanarak o girdiyi iptal etmeniz mümkündür.
+ 10
+ Hata Ayıklama ve Loglama: SMAPI modlar için entegre bir log sistemi sunar.
+ this.Monitor.Log("Mesaj", LogLevel.Debug) gibi çağrılarla SMAPI konsoluna ve log dosyasına
+ bilgi yazabilirsiniz . Bu, mod geliştirirken hataları ve mod davranışını izlemede çok yardımcıdır. Ayrıca
+ SMAPI, modunuzun hatalarını yakalar ve detaylı bir stack trace ile birlikte log’a yazar. Kullanıcılar da
+ SMAPI Log Yükleyici sitesini kullanarak bu logları paylaşabildiğinden, modlarınızın log çıktısını temiz ve
+ anlaşılır tutmak önemlidir.
+ Reflection (Yansıma): Bazı oyun özellikleri normalde mod API’siyle erişilebilir değildir (örneğin, bazı
+ özel alanlar veya yöntemler 
+internal veya 
+private olabilir). SMAPI, 
+helper.Reflection
+ aracılığıyla oyunun iç nesnelerine yansıma yoluyla ulaşmanıza izin verir . Örneğin, 
+11
+ Game1.player
+ içinde normalde özel olan bir değeri değiştirmek isterseniz reflection ile alabilirsiniz. Bu güçlü bir araç
+ olsa da, oyun güncellemelerinde kırılma riski taşıdığı için dikkatli kullanılmalıdır. 1.6 sürümüyle pek
+ çok gizli özellik artık Content API veya veri dosyalarıyla açıldığından, reflection’a daha az ihtiyaç
+ duyarsınız, ancak gerektiğinde hala mümkündür (özellikle SMAPI’nin sunmadığı uç özelliklere erişmek
+ için).
+ Çoklu Oyuncu Desteği: SMAPI, modların multiplayer uyumluluğunu yönetmesine yardımcı olur . 
+Context.IsMultiplayer veya 
+12
+ Context.IsMainPlayer gibi özelliklerle o an host mu yoksa
+ farmhand 
+(misafir 
+oyuncu) 
+mu 
+olduğunuzu 
+kontrol 
+edebilirsiniz. 
+Modlar,
+ helper.Multiplayer.SendMessage ile ağ üzerinden veri gönderebilir veya diğer modların
+ gönderdiği mesajları 
+Multiplayer.ModMessageReceived ile dinleyebilir. Ayrıca SMAPI, net kodlu
+ oyun 
+alanlarını 
+(Netcode) 
+otomatik 
+senkronize 
+eder. 
+Örneğin,
+ Game1.player.team.useSeparateWallets gibi bir net alanı değiştirdiğinizde host üzerinden tüm
+ oyunculara yayılır. Multiplayer ortamında dikkat edilmesi gereken önemli noktalardan biri de farmhand
+ shadow world denilen durumdur: Ana oyuncu (host) tüm haritalara sahipken, misafir oyuncular sadece
+ 2
+aktif oldukları bölgelerin gerçek halini görür, geri kalan bölgeler “hayalet” kopyalardır . Bu
+ 13
+ 14
+ nedenle modunuz dünya üzerinde büyük değişiklikler yapıyorsa, 
+location.IsActiveLocation()
+ kontrolüyle değişikliği yapan kişinin ana oyuncu olup olmadığını veya alanın aktif senkronize bir alan
+ olup olmadığını kontrol etmek iyi bir fikirdir .
+ 15
+ Çeviri (Localization): Modlarınızı farklı dillere uyarlamak için SMAPI bir çeviri API’si sunar .
+ Modunuzun dizininde bir 
+i18n klasörü altında her desteklenen dil için 
+16
+ 12
+ .json dosyaları
+ oluşturabilirsiniz. Kod içinde 
+helper.Translation.Get("key") ile o anki oyun diline göre doğru
+ metni alabilirsiniz. Örneğin, 
+this.Helper.Translation.Get("welcome.message") çağrısı,
+ diyelim Türkçe için 
+tr.json içinde tanımladığınız metni döndürür. Bu sayede modunuzun metinlerini
+ tek tek kod içine yazmak yerine çeviri dosyalarına koyup, topluluk çevirilerine açabilirsiniz. Unutmayın ki
+ teknik terimleri ve kod class isimlerini genelde çevirmemek daha doğrudur; oyuncuya görünen
+ açıklama ve mesajları çevirmek yeterlidir.
+ Güncelleme Kontrolü: Manifest dosyanıza ekleyebileceğiniz 
+"UpdateKeys" alanı sayesinde
+ modunuzun yeni sürümü çıktığında oyuncuya bildirim yapılabilir. Örneğin NexusMods üzerinde mod
+ yayınlıyorsanız Nexus mod ID’nizi buraya koyabilirsiniz. SMAPI, oyunu başlatırken tüm modların güncel
+ olup olmadığını kontrol eder ve SMAPI konsolunda eski sürüm mod varsa oyuncuya uyarı gösterir. Bu
+ özellik, oyuncuların modlarınızı güncel tutmasına yardımcı olur ve modunuzla ilgili bilinen hataların eski
+ sürümlerde takılı kalmasını önler.
+ Oyun Temelleri (Game Fundamentals)
+ Mod geliştiricilerinin oyunun temel çalışma prensiplerini bilmesi büyük avantaj sağlar. Zaman ve
+ Takvim: Stardew Valley, gün içi zamanı 10 dakikalık birimleri temsil eden bir sayıyla takip eder. Bu
+ sistem 24 saat biçimine benzer fakat gece 2’den sonra 26 saat gibi devam eden bir format kullanılır (bu
+ 17
+ 18
+ yüzden “26-saat zaman” denir) . Örneğin oyun kodunda 
+Game1.timeOfDay sabah 6:00 için
+ 600, öğlen 1:00 için 1300 değerini alır. Gece 2:00’de (yatılsa bile) 2600’e ulaşır, sonra ertesi sabah 6:00’da
+ 3000 olur. Modlar için pratikte bu, zamanı kontrol ederken veya ayarlarken bu değerleri kullanmanız
+ gerektiği anlamına gelir. Bir gün sonu etkinliği tetiklemek isterseniz 
+Game1.timeOfDay == 2600
+ şartını yakalayabilirsiniz. Ayrıca oyun takvimi mevsim (spring/yaz vs), gün ve yıl şeklinde
+ Game1.currentSeason , 
+Game1.dayOfMonth , 
+Game1.year alanlarında tutulur.
+ Koordinat Sistemleri: Oyun dünyası grid tabanlı bir haritadır. Her tile (karo) 64x64 piksel alana sahiptir
+ ve dünya “tile koordinatları” ile referans alınır. 
+19
+ (0,0) koordinatı haritanın sol üst kösesini temsil eder;
+ x sağa, y aşağı arttıkça ilerler . Bir objenin konumu için genelde tile koordinatları kullanılır (örn.
+ GameLocation.objects içindeki bir eşya, tile konumu ile kayıtlıdır). Ancak hassas hareketler veya
+ piksel hesaplamaları için mutlak (absolute) piksel koordinatları gerekir. Örneğin bir NPC’nin anlık
+ konumu 
+20
+ NPC.Position ile piksel cinsinden alınır. Ayrıca bir de ekran koordinatları vardır ki bu da
+ oyun dünyasının o an ekranda görünen kısmına göre (viewport) hesaplanır. SMAPI size bunları çevirmek
+ için yardımcı metodlar sunar; ama kendiniz yapmak isterseniz: bir tile koordinatını piksele çevirmek için
+ x * Game1.tileSize kullanırsınız . Ekran koordinatı elde etmek için dünya pikselinden o anki
+ kamera offset’ini (Game1.viewport.X, Y) çıkartırsınız. Örneğin bir NPC’nin ekrandaki çizim pozisyonu =
+ npc.Position - Game1.viewport . Bu koordinat sistemleri, modlarda özellikle özel grafik çizerken
+ veya konum hesapları yaparken önemlidir.
+ Yakınlaştırma (Zoom) ve Arayüz Ölçeği: Oyuncular oyun içi grafikleri %75 ile %200 arasında
+ yakınlaştırabilir. Bu 
+21
+ Game1.options.zoomLevel ile temsil edilir . Genelde SMAPI modları
+ koordinatları otomatik ölçeklenmiş alır, bu yüzden çoğu durumda ekstra bir şey yapmanıza gerek
+ yoktur; fakat eğer tam pixel hesapları yapıyorsanız, yakınlaştırma düzeyine göre koordinatları bölmeniz
+ 3
+23
+ veya çarpmanız gerekebilir. Örneğin, UI dışında bir noktayı sabit pikselde çizmek isterseniz,
+ position * (1f / Game1.options.zoomLevel) ile normalleştirebilirsiniz. UI ölçeği (kullanıcı
+ arayüzü ölçeklemesi) ise ayrı bir ayardır ve %75–150 arası değişebilir . UI elemanları çizilirken
+ Game1.uiMode true olur ve koordinatlar buna göre ayarlanır. Mod geliştirirken, dünya koordinatları
+ ile UI koordinatlarını karıştırmamaya dikkat edin; örneğin bir menü açıyorsanız koordinatlar UI
+ ölçeğine tabidir, ama dünya üzerinde sprite çiziyorsanız normal moddadır. Gerekirse
+ Game1.game1.InUIMode(() => { ... }) kullanarak manuel olarak UI modda çizim yapabilirsiniz
+ .
+ 22
+ Ana Sınıflar ve Oyun Durumu: Stardew Valley’nin asıl oyun mantığı statik 
+toplanmıştır. 
+Game1 sınıfında
+ Game1.player o anda kontrol edilen Farmer (oyuncu karakteri) nesnesidir; modlar sıkça
+ buna 
+erişip 
+oyuncunun 
+envanterini, 
+konumunu veya özelliklerini okurlar . 
+Game1.currentLocation oyuncunun bulunduğu haritayı tutar. Eğer modunuz tüm haritalardaki
+ objeleri taramak istiyorsa 
+24
+ 25
+ Game1.locations listesini kullanabilirsiniz (yalnız multiplayer’da bu liste
+ host için tüm haritaları, misafir için sadece kendi aktif haritalarını içerir; SMAPI bunun için
+ GetActiveLocations() metodunu sunar ki farmhand “hayalet dünyasını” filtreleyebilin ). 
+GameLocation sınıfı, ziyaret edilebilir her mekanı temsil eder. Örneğin “Forest” haritası bir
+ 26
+ GameLocation nesnesidir ve içinde oradaki NPC’lerin listesi (
+ 27
+ characters alanı), oradaki eşyalar
+ 28
+ 30
+ 31
+ 29
+ (Objects sözlüğü) gibi pek çok veri yapısı barındırır . Her GameLocation ayrıca o haritaya ait
+ tilemap, terrain features (ekili tarla, ağaçlar vs.), su alanları (waterTiles iki boyutlu dizisi) gibi alanlara
+ sahiptir . Modlar için pratik olarak, belirli bir haritadaki tüm nesneleri değiştirmek isterseniz
+ foreach(var obj in location.Objects) ile gezebilir veya NPC aramak için
+ location.characters listesini tarayabilirsiniz. Ayrıca Utility.ForAllLocations metodunu kullanarak
+ tüm aktif mekânlar üzerinde kolayca döngü kurabilirsiniz (bu yöntem otomatik olarak shadow world
+ kopyalarını es geçebilir) . 
+32
+ Çok Oyunculu Temel Kavramlar: Multiplayer oyunlarda bazı mekanikler farklı işler. Örneğin, netcode
+ alanlar (Net fields), oyun içinde senkronize tutulan verileri temsil eder. 
+NetBool , 
+33
+ 34
+ NetInt gibi tipler
+ oyunun kendi içinde sürekli host ile diğer oyuncular arasında senkronize edilir . Bu da demektir
+ ki modunuz, Farmer veya GameLocation gibi sınıflardaki net alanları değiştirdiğinde (örneğin bir
+ NetBool değeri set ederse) SMAPI/oyun bunu otomatik tüm oyunculara yansıtır. Ancak modlar arası
+ mesajlaşma yapmak ya da host’a özel işlemler gerçekleştirmek istiyorsanız, SMAPI’nin Multiplayer
+ API’sini kullanmanız gerekir (örneğin bir misafir oyuncu bir şeyi tetiklediğinde host’ta belli bir kod
+ çalıştırmak gibi). Bir de çiftlikhand “shadow world” konusu var: İkincil oyuncular (misafirler) bazı
+ haritaların tam güncel halini ellerinde tutmazlar. Varsayılan olarak host, misafirin bulunduğu alanı ve
+ birkaç ek önemli mekanı onlarla paylaşır, geri kalan mekanlar misafirin cihazında bir nevi tek oyunculu
+ 35
+ 36
+ kopya olarak “gölge” durumda kalır . Bu yüzden modunuz tüm 
+Game1.locations üzerinden
+ bir şey yaparken, eğer misafir oturumdaysa o listede “sahte” veriler olabileceğini unutmayın. Bu,
+ genelde sorun yaratmaz ama örneğin bir mod tüm NPC’leri haritalar arasında taşıyorsa, host olmayan
+ oyuncularda senkron sorunları olabilir. SMAPI, farmhand’in etkin olmayan (gölge) haritalarını tespit için
+ IsActiveLocation() gibi yardımcılar sunar. Özetle, modlarınızı mümkün olduğunca host tarafında
+ kritik değişiklikler yapacak şekilde tasarlamanız, misafir tarafında ise görsel veya yan işlevleri
+ yürütmeniz iyi bir yöntemdir.
+ NPC’ler (Karakterler) ve İlgili Sistemler
+ Stardew Valley’de köylüler ve diğer NPC’ler (evcil hayvanlar, canavarlar, vs.) modlama ile oldukça esnek
+ şekilde özelleştirilebilir veya yenileri eklenebilir. Yeni bir özel NPC oluşturmak için bir dizi veri dosyasını
+ düzenlemeniz gerekir: 
+Data/Characters (temel bilgiler), 
+Data/NPCGiftTastes (hediye tercihleri),
+ Characters/Dialogue klasöründe diyalog dosyaları, 
+Characters/schedules klasöründe takvim
+ 4
+(günlük rutin) dosyası, portre ve sprite görselleri (
+ Portraits/ ve 
+Characters/ klasörlerinde PNG),
+ varsa özel event cutscene’leri için 
+Data/Events girdileri, evlilik destekliyorsa 
+Data/Weddings
+ 37
+ 38
+ girdisi, vb . Kulağa çok gibi gelse de, Content Patcher ile bunların çoğunu JSON formatında
+ ekleyebilirsiniz; C# kodu yazmadan sadece içerik paketleriyle yeni bir köylü eklemek mümkündür .
+ 39
+ NPC Temel Verileri (Data/Characters): Bu veri dosyasında her NPC için kapsamlı ayarlar bulunur. Girdi
+ anahtarı, NPC’nin dahili adını ve mod kimliğini içerir (örn. 
+Example.ModId_Jessie gibi, bu benzersiz
+ ID NPC’nin 
+40
+ 41
+ Name alanı olarak kullanılır) . Karşılık gelen değer ise bir JSON obje olup birçok alan
+ içerir. Örneğin: - 
+DisplayName : NPC’nin oyunda görünen adı (çeviri destekli yazılır). - 
+Female veya Undefined olabilir (bazı genel diyalogları etkiler) . - 
+42
+ üslubunu değiştirir; örn. çocuklar bazı kelimeleri farklı kullanır) . - 
+43
+ Gender : Male, 
+Age : Child, Teen, Adult (diyalog
+ Manner , 
+SocialAnxiety , 
+Optimism : Karakterin nazik/kaba, utangaç/girişken, iyimser/pesimist gibi kişilik ayarları (bunlar
+ oyunun jenereik diyaloglarını etkiler; örneğin utangaç biri oyuncuyla tanışırken farklı tepki verir)
+ 45
+ . - 
+BirthSeason ve 
+BirthDay : Doğum günü, takvimde görünmesi için. - 
+44
+ HomeRegion : NPC’nin
+ yaşadığı bölge (Town, Desert veya Other). Bu, tanışma görevi veya Yıldızlı Gökyüzü Festivali’ndeki
+ eşleşmeler gibi durumlardan kimlerin sayılacağını belirler .
+ 46
+ Ayrıca sosyal özellikler bölümü vardır: - 
+48
+ 49
+ 47
+ CanSocialize : Bu NPC, arkadaşlık puanları, hediyeleşme,
+ sosyal menü girişi gibi özelliklere sahip mi? (örn. hasat cüceleri gibi sosyal olmayan varlıklar için false
+ olabilir) . - 
+CanBeRomanced : true ise bu NPC ile ilişki kurulup evlenilebilir (single etiketini açar,
+ 50
+ buketle flört edilebilir, vs) . - 
+CanReceiveGifts : Hediye verilebilir mi (genelde true bırakılır, ama
+ belki çocuk NPC’lere false denebilir – gerçi SV’de çocuklara hediye veremiyoruz). - 
+CanVisitIsland :
+ 1.5 ile gelen Ginger Island tatil köyüne gidebilir mi? (false ise asla adaya gelmez) . - 
+51
+ ve 
+52
+ SocialTab
+ Calendar gibi alanlar, NPC’nin sosyal sekmede gizli mi olacağı veya takvimde görünmesi için
+ koşulları gibi detayları kontrol eder (örn. “UnknownUntilMet” ile önce ‘???’ görünmesi sağlanabilir) .
+ 53
+ Bu temel veriler dışında, Görsel varlıklar (portre PNG ve sprite PNG), Animasyonlar (örn. uyuma
+ animasyonu, eğer özel ise) ve ikincil varlıklar (evcil hayvanı varsa, odası vs.) da mod paketinize dahil
+ olmalıdır.
+ Diyaloglar: NPC’lerin konuşmaları 
+Characters/Dialogue/NPCAdı.xnb dosyalarında bulunur (XNB
+ yerine Content Patcher içerik paketi kullanırken JSON olarak yaması yapılır). Diyalog sisteminde her
+ NPC’nin sabit bazı diyalog başlıkları ve günlük konuşmaları vardır. Örneğin “Rainy” altındaki diyaloglar
+ yağmurlu günlerde, “_summer_Mon” formatlı anahtarlar yaz mevsimi Pazartesi günleri için kullanılabilir.
+ Oyun, öncelik sırasına göre bir diyalog seçer: Özel durumlar (kalp etkinlik konuşmaları, festival
+ konuşmaları, vs.) önceliklidir, ardından haftanın günü + kalp sayısı kombinasyonları gelir, en son genel
+ 54
+ 55
+ konuşmalar kullanılır . Örneğin, bir NPC için 
+günleri söyleyeceği repliği tanımlar . 
+56
+ Sun4 anahtarı o NPC ile en az 4 kalp varsa Pazar
+ 57
+ Tue2_2 anahtarı “Salı günü, 2+ kalp, 2. (ve sonrası) yıl”
+ anlamına gelir ve buna uygun bir cümle içerir . Modlama açısından, yeni bir NPC eklerken en
+ azından temel diyaloglar (tanışma, yağmur, kış, evlendiyse eş konuşmaları vs.) sağlanmalıdır. Ayrıca
+ hediye reaksiyonları (birazdan bahsedeceğiz) diyalog dosyalarında değil, 
+dosyasında tanımlanır.
+ NPCGiftTastes veri
+ Özel Diyalog Komutları: Diyalog metinlerinde bazı özel semboller ve komutlar vardır. Örneğin 
+#$b#
+ dizisi cümleyi böler ve aynı konuşmada bir sonraki satıra geçer. 
+#$e# ise konuşmayı orada bitirip
+ diyalog kutusunu kapatır (bazı durumlarda seçeneklerden sonra kullanılır). 
+{0} ve 
+{1} gibi yer
+ tutucular, kod içinde geçici olarak bir isim veya eşya adı yerleştirmek için kullanılır. Mesela eş kıskançlık
+ diyaloglarında “{0} ile hediyeleştin” gibi bir yerde {0} diğer NPC’nin adını temsil eder . Ayrıca 
+58
+ $q ve
+ $r komutlarıyla soru-cevap oluşturulabilir (kısıtlı bir sistemle, genellikle kalp etkinliklerinde kullanılır).
+ Bu sistem modlama ile pek değiştirilmez, ama diyalog yazarken bu sembolleri bilmek gerekir. Content
+ 5
+Patcher, diyalog ekleme/değiştirme işlemlerini kolaylaştırır; modunuzun çeviri desteği varsa diyalog
+ metinlerini tokenizable string formatında da tanımlayabilirsiniz (örn. 
+"Nice to meet you, 
+[FarmerName]!" gibi, ki bu [FarmerName] oyun içinde oyuncu adını koyacaktır) .
+ 59
+ Rutinler (Schedules): NPC’lerin her gün nereye gidip ne yaptıklarını tanımlayan takvimler,
+ Characters/schedules/NPCAdı.json dosyalarında bulunur (1.6 ile JSON formatına geçtiler). Bu
+ dosyalarda anahtar olarak koşullar, değer olarak zaman çizelgesi verilir. Örneğin bir NPC dosyasında
+ şunlar olabilir:
+ "Tue": "900 Town 50 60 2/1300 Hospital 10 5 1/1800 Town 30 20 3/2200 Home 10 
+4 0",
+ "rain": "1000 Home 8 4 2/1200 Home 5 4 2/1800 Home 8 4 3",
+ "spring_16": "GOTO spring",
+ "16": "GOTO Tue"
+ Burada 
+"Tue" Salı günlerini tanımlar: 9:00’da kasabada (Town) belirli bir koordinata, 13:00’de
+ hastanede başka bir koordinata, vs gider. 
+"rain" anahtarı yağmurlu günlere özel bir rutin verir (dışarı
+ çıkmıyor, evde kalıyor örneğin). 
+spring_16 anahtarının değerine GOTO spring yazılmış, bu şu anlama
+ gelir: eğer tarih bahar 16 ise, normal “spring” (bahar genel) rutini uygula (muhtemelen o gün bir festival
+ vardır ama örnek gereği). Yine 
+"16": "GOTO Tue" demiş, yani ayın 16’sı eğer özel bir festival yoksa
+ normal Salı rutini kullanılsın demek. Rutin dosyalarında koşulların öncelik sırası vardır: Önce special
+ etiketli (festival isimleri, vs), sonra evli NPC’ler için marriage_ ile başlayanlar, sonra mevsim/gün
+ eşleştirmeleri kontrol edilir . Koşul eşleşmelerinden ilk bulunan uygulanır. Takvim satırlarında her
+ 60
+ 61
+ segment 
+saat mekan x y yön [animasyon/eylem] şeklindedir. Saat 24 saatlik “2600 formatı”na
+ göredir (900 = 9:00AM). Mekan ismi, tile koordinat ve yön (0=up,1=right,2=down,3=left) verilir. İsteğe
+ bağlı olarak bir animasyon komutu veya diyalog satırı eklenebilir. Örneğin bir rutin parçasında 
+Saloon 
+42 17 2 abigail_sit_down denmişse, NPC belirtilen konumda oturma animasyonuna geçecektir.
+ Eğer 
+Strings\schedules\Abigail:Fri.000 gibi bir şey görürseniz, bu rutin sırasında o noktada
+ bir konuşma balonu göstereceği anlamına gelir (balon metinleri 
+Strings/schedules içinde
+ tanımlıdır) . 
+62
+ Modlamada, özel bir NPC’ye kendi rutinlerini yazmalı veya mevcut NPC’nin rutinlerini değiştirmelisiniz.
+ Content Patcher ile EditData eylemi sayesinde bu JSON’a yeni keyler ekleyebilir veya var olanı
+ değiştirebilirsiniz. Mesela bir mod, Haley’nin yağmurlu günlerde farklı yere gitmesini istiyorsa
+ EditData Target:"Characters/schedules/Haley" Entries: { "rain": "..." } yapabilir.
+ Yeni NPC ekliyorsanız, en azından basit bir schedule (genelde tüm gün evde duracak şekilde) yazmanız
+ önerilir; aksi halde NPC haritada görünmez veya sabit bir noktada çakılı kalabilir.
+ Hediye Tercihleri: NPC’lerin hangi hediyeleri sevip sevmediği 
+63
+ Data/NPCGiftTastes.xnb içinde
+ tanımlıdır. 1.6 itibarıyla bu da JSON modele çevrildi. Bu veri, hem evrensel tercihler (tüm kasabalıların
+ ortak sevdiği/sevmediği şeyler) hem de kişisel tercihler içerir . Örneğin “Universal_Love” listesinde
+ Rabbit’s Foot gibi herkesin sevdiği bir eşya bulunur. Kişisel kısımda ise her NPC adı için bir giriş vardır. Bu
+ girişte sevgiden nefrete 5 kategori için tepkiler ve eşya listeleri yer alır. Örnek olarak Abigail’in verisini
+ inceleyelim :
+ 64
+ 65
+ • 
+66
+ "Abigail": "I seriously love this!.../<IDs for Loved items>/Hey, how'd you 
+know I was hungry?.../<IDs for Liked items>/...What am I supposed to do 
+with this?/<IDs for Disliked items>/What were you thinking? This is awful!/
+ <IDs for Hated items>/You brought me a present? Thanks.//"
+ 6
+Burada eğik çizgi (
+ / ) ile ayrılan kısımlar sırayla Love / Like / Dislike / Hate / Neutral kategorilerini
+ temsil ediyor. Her kategoride ilk kısım NPC’nin bu kategorideki bir hediyeye vereceği diyalog tepkisi,
+ ikinci kısım ise ilgili eşya veya kategori ID listesidir. Örneğin Abigail için Loved bölümünde
+ "66 128 220 226..." gibi sayılar var; bunlar Abigail’in bayıldığı eşyaların ID’leri (66 = Amethyst vs.).
+ Hated bölümünde 
+"330" görünüyor, bu Trash kategorisinin kodu (Abigail çöpleri hiç sevmez). Kategori
+ ID’leri - ile başlar (mesela -5 tüm yemekler, -79 tüm pişmiş yemekler vs.), pozitifler ise tekil eşya
+ ID’sidir. Bu veri sayesinde oyun, oyuncu bir hediye verdiğinde kimin nasıl tepki vereceğini belirler. Mod
+ olarak, yeni bir NPC ekliyorsanız mutlaka hediye tercihlerini de eklemelisiniz; aksi halde varsayılan
+ olarak neutral davranırlar. Content Patcher ile yeni NPC’nizin adını ve tercih listesini 
+NPCGiftTastes
+ içine ekleyebilirsiniz. Veya mevcut bir NPC’nin tercihini değiştirmek isterseniz ilgili satırı
+ düzenleyebilirsiniz. Dikkat edilmesi gereken nokta: Hediye tercih verisi, oyun içinde hediye reaksiyon
+ diyaloglarını da içerdiğinden, burada 
+{{i18n:key}} kullanarak metinleri çevirilebilir yapmak
+ mümkündür. 
+Evlilik ve Özel Etkinlikler: Eğer modunuz bir NPC’yi evlendirilebilir yapıyorsa, o NPC’nin evlilik sonrası
+ özel event’lerini ve içeriklerini de tanımlamalısınız. Örneğin Custom wedding events başlığı altında,
+ Data/Weddings varlığı ile evlilik töreni esnasında neler olacağını özelleştirebilirsiniz . 1.6
+ güncellemesiyle, artık her NPC veya çiftçi eş için ayrı düğün senaryosu tanımlamak mümkün. 
+68
+ 67
+ Data/
+ Weddings içinde, anahtar olarak NPC’nin internal adı, değer olarak tören sırasında çalışacak event
+ script verilir . Eğer bir NPC için özel bir düğün script’i yoksa oyun varsayılanı kullanır. Bu event
+ script’leri normal oyun içi event komutlarından oluşur (konuşmalar, hareketler vs.) ve ayrıca
+ [SpouseActor] gibi düğüne özel bazı token’lar içerir . Örneğin 
+69
+ esnasında evlenilen kişiyi (NPC adı ya da 
+[SpouseActor] düğün
+ farmer2 gibi) temsil eder, böylece event komutlarında o
+ karakteri yönlendirebilirsiniz. Ek olarak 
+Attendees listesiyle düğüne katılacak diğer NPC’leri ve
+ törendeki pozisyonlarını tanımlayabilirsiniz (kimler katılır, nereye durur, ne yapar) . Eğer mod NPC’niz
+ evlenebiliyorsa, onun benzersiz bir düğün töreni olmasa bile en azından bir giriş eklemeniz gerekir ki
+ 70
+ oyun crash olmadan düğünü gerçekleştirsin (genelde 
+default script kullanabilirsiniz). Bunun dışında,
+ kalp etkinlikleri (10 kalp event gibi) eklemek isterseniz 
+Data/Events/MapName dosyalarına
+ modunuzun event’ini eklemelisiniz. Event verileri oldukça yoğun olabileceğinden, burada sadece not
+ düşüyoruz: Oyun event komutları (örn. 
+"speak Name 'Hello'" gibi) 
+71
+ Event_data sayfasında
+ belgelenmiştir ve modlar yeni eventler ekleyebilir . Özel bir event eklediğinizde, bu eventin
+ tetiklenme koşulunu (precondition) doğru ayarlamalısınız. Örneğin belirli kalp sayısına ulaşıp oyuncu
+ 72
+ evde uyuyunca tetiklenen bir event istiyorsanız 
+e <NPC> <Hearts> ve 
+kullanırsınız. Content Patcher’da event eklemek için genelde 
+n <NPC> gibi şartlar
+ EditData ile ilgili Data/Events dosyasına
+ yeni bir satır eklersiniz; SMAPI, JSON içindeki listeleri birleştirme desteği sunar.
+ Özetle, NPC modlama belki en zahmetli kısmı gibi görünse de tamamen veri dosyaları düzenlenerek
+ yapılabildiği için oldukça güçlüdür. Yeni bir köylü oluştururken yukarıdaki tüm yönleri (temel veri,
+ diyalog, rutin, hediye, etkinlikler, görseller) düşünmelisiniz. İyi haber, toplulukta bunun için halihazırda
+ şablonlar ve araçlar bulunmakta; örneğin Stardew Valley modlama wiki’sinde adım adım özel NPC
+ yapma rehberleri mevcuttur. Ayrıca Content Patcher ile sağlanan pek çok snippet ve hazır çeviri desteği
+ de işinizi kolaylaştırır.
+ Eşya Verileri (Item Data) ve Yeni Eşya Oluşturma
+ Stardew Valley’de eşyalar farklı türlere ayrılır ve her türün verileri ayrı dosyalarda tanımlanır. Oyunda bir
+ eşyayı kodla temsil etmek için genelde Qualified ID (Nitelikli ID) kullanılır. Bu, eşyayı küresel olarak
+ benzersiz tanımlar: parantez içinde tür kodu ve ardından ID şeklinde yazılır, örneğin 
+nesneyi (Object) temsil ederken 
+73
+ (O)128 bir
+ (H)12 bir şapkayı temsil edebilir . Tür kodları şunlardır: 
+74
+ (O) =
+ Objeler (ör: meyveler, madenler, yiyecekler vb. tüm envanterde tutulan normal eşyalar) , 
+75
+ (BC) =
+ 7
+Big Craftables (büyük yerleştirilebilir aletler, fıçı, fırın gibi) , 
+75
+ = Hats (şapkalar) , 
+76
+ (B) = Boots (çizmeler) , 
+77
+ (F) = Furniture (mobilyalar) , 
+76
+ (H)
+ (W) = Weapons (silahlar: kılıç, sapan) , 
+78
+ Tools (araçlar: kazma, balta, vb.) , 
+79
+ (S) = Shirts (gömlekler), 
+(T) =
+ (P) = Pants (pantolonlar) , 
+80
+ = Mannequins (vitrin mankenleri, 1.6 ile eklendi) , 
+81
+ (M)
+ (TR) = Trinkets (1.6 ile eklenen, oyuncunun özel
+ eşya slotu için takılar) , 
+82
+ (WP) = Duvar kağıdı ve 
+verisi ayrı dosyadadır (örn. 
+Data/Objects.json , 
+78
+ (FL) = zemin döşemeleri . Her item türünün
+ Data/Weapons.json , 
+Data/Boots.json vb).
+ Bu dosyalarda genelde her giriş "ID: değerler" veya "Ad: değerler" formatındadır.
+ Yeni bir eşya eklemek için ilgili türün veri dosyasına bir giriş eklemeniz ve o türün sprite sheet’ine
+ görüntüsünü yerleştirmeniz gerekir. Örneğin yeni bir tohum paketi eklemek istiyorsanız, 
+Data/
+ Objects dosyasına bir JSON girişi ekleyip benzersiz bir ID vermelisiniz (1.6 öncesi boş ID bulmak
+ gerekirdi, şimdi string ID kullanmak mümkün: mod kimliğinizi önek yaparak bir ID verebilirsiniz, örn.
+ "MyMod.UniqueBerrySeeds": { ... } ). Bu girdide en az Name, Description, Price, Category/
+ Type gibi alanlar tanımlanır
+ 83
+ {
+ 84
+ . Örneğin Content Patcher ile bir eşya ekleme şöyle olabilir :
+ "Action": "EditData",
+ "Target": "Data/Objects",
+ "Entries": {
+ "ExampleMod_Pufferchick": {
+ "Name": "ExampleMod_Pufferchick",
+ "DisplayName": "Pufferchick",
+ "Description": "Bir örnek özel eşya (pofuduk civciv).",
+ "Type": "AnimalProduct",
+ "Category":-5,
+ "Price": 1200
+ }
+ }
+ }
+ 83
+ 84
+ Yukarıda 
+ExampleMod_Pufferchick adında yeni bir obje tanımlanıyor. DisplayName oyuncunun
+ göreceği isim, Description ise açıklama metni (ikisi de çevirilebilir string olabilir). Type/Category
+ kısımları oyunun o eşyayı nasıl sınıflandıracağını belirler: Örneğin 
+65
+ Category: -5 değeri, bunun bir
+ yumurta/süt gibi hayvansal ürün olduğunu belirtiyor (kategori kodları negatif sayılarla temsil edilir, -5 =
+ “Eggs” kategorisi gibi) . Bu sayede oyun, o eşyayı uygun yerlerde o kategori altında sayar (ör.
+ Tavernada Omlet tarifinde “-5 1” bir yumurta gerektiriyorsa, bu yeni eşya da sağlarsa kullanılabilir olur). 
+Eşyanın sprite’ı için Content Patcher’da ayrıca bir Load aksiyonu kullanarak PNG dosyanızı oyuna
+ yüklemelisiniz. Genelde 
+Maps\springobjects.png veya ilgili spritesheet’e sprite eklenir. 1.6 ile, özel
+ içerik yüklemek daha kolaylaştı; Content Patcher ya da SMAPI’nin Content API’si ile tamamen yeni bir
+ spritesheet de tanımlayabilirsiniz. Örneğin yeni eşyalar için 
+Mods/YourMod/youritems.png gibi bir
+ sprite seti yükleyip, veri dosyasında 
+"Texture": "Mods/YourMod/youritems", "Index": X
+ diyerek resimdeki yerini belirtebilirsiniz. (Eskiden var olan bir spritesheet’in sonuna eklemek gerekirdi,
+ şimdi index sisteminde modunuza özel bir sayfa da kullanabiliyorsunuz). ParentSheetIndex dediğimiz
+ değer, bir eşyaya sprite sheet içinde hangi pozisyondaki resmi kullanacağını söyler; bu 0’dan başlar ve
+ soldan sağa, yukarıdan aşağı sayılır . Eğer kendi spritesheet’inizi kullanırsanız, Index değerinizi o
+ resim üzerindeki konuma göre verirsiniz.
+ 85
+ 8
+Özetle: Yeni bir nesne (Object), giysi, silah vs. eklemek istediğinizde, ilgili veri setine girdi eklemeli ve
+ görselini oyuna yüklemelisiniz. SMAPI modları bunu runtime’da yapabilir ama çoğunlukla Content
+ Patcher paketi olarak dağıtmak tercih edilir. SMAPI’nin content patching olanağı sayesinde modlarınız
+ dinamik olarak bu verileri ekleyebilir; mod yüklenip oyuna girildiğinde SMAPI sizin JSON girişinizi
+ oyunun data yapısına enjekte eder. 
+Ürünlerin ID Çakışması: 1.6’dan önce modcular, yeni eşya eklerken boşta olan bir sayısal ID aramak
+ zorundaydı (buna “the big ID spreadsheet” ile bakılıyordu). Artık modlar, kendi eşyalarına string ID
+ verebiliyor ve SMAPI bunları otomatik olarak benzersiz bir sayıya haritalıyor. Yine de, bir eşyayı başka bir
+ veri dosyasında referans verirken Qualified ID kullanmak gerekebiliyor. Örneğin yeni bir mahsul
+ ekliyorsanız, 
+Data/Crops içinde 
+HarvestItemId alanına hasat ürününüzün ID’sini string olarak
+ yazabilirsiniz. Ardından Content Patcher, sizin tanımladığınız “ExampleMod_Meyve” ID’sini oyun
+ başladığında gerçek sayısal ID’ye eşler ve her yerde tutarlı olmasını sağlar.
+ Mahsuller (Crops): Ekilebilir ürünlerin büyüme takvimi 
+Data/Crops.json dosyasında tanımlıdır.
+ Burada anahtar olarak tohum eşyasının ID’si kullanılır. Yani oyunda 472 ID’li “Parsnip Seeds” için bir giriş
+ vardır ve büyüme aşamaları, mevsimleri vs. tanımlanır . Bu veri JSON formatında bir model içerir:
+ 86
+ 87- Seasons: büyüyebildiği mevsimler listesi (örn. ["Spring", "Summer"]). - 
+DaysInPhase : her büyüme
+ evresinin kaç gün sürdüğü (dizi olarak, tohumdan olgunluğa kadar). - 
+RegrowDays : eğer bu bitki
+ tekrar hasat veriyorsa (ör. çilek, domates gibi), tekrar meyve vermesi için geçmesi gereken gün sayısı;
+ tek seferlik mahsulse -1 olur . - 
+87
+ 88
+ HarvestItemId : ürünün ID’si (yani olgunlaşınca elde edilecek
+ obje, örn. 24 = Parsnip). - 
+HarvestMinStack ve 
+HarvestMaxStack : her hasatta kaç adet ürün çıkar
+ (patates mesela 1-2 arası çıkar; çilek her seferinde 1 çıkar). - 
+ExtraHarvestChance : eğer birden fazla
+ ürün çıkma ihtimali varsa, bunun olasılığı (patatesin ekstra ikinci patates çıkarma şansı ~%20’dir, bu
+ alanda 0.2 olarak tanımlanır) . - 
+89
+ 90
+ HarvestMethod : "Hand" (elle toplama) veya "Scythe" (orağı
+ gerektirir) olabilir . Örneğin yeşil lahana orakla, domates elle toplanır. Bu, 0 veya 1 ile de temsil
+ ediliyordu eskiden, şimdi muhtemelen string olarak var. - 
+NeedsWatering : true ise büyüme için her
+ gün sulanmalı, false ise kaktüs meyvesi veya çay bitkisi gibi sulamaya gerek duymaz . 
+TintColors : Bazı mahsuller, mevsime göre renk tonu değiştirebilir (ör. bukalemun çiçeği gibi mod
+ mahsulleri böyle yapabilir); bu liste renk kodlarını içerir, genelde boş bırakılır vanilla’da. 
+CountForMonoculture/Polyculture : Bu mahsulün Polikültür veya Monokültür başarımlarına katkı
+ sayılıp sayılmayacağı (ör. fiber bitkisi sayılmaz). Varsayılan true. 
+Yeni bir mahsul eklerken, öncelikle onun tohum eşyasını 
+91
+ 92
+ Data/Objects içine eklemeli (Category
+ genelde -74 “Seed” yapmalısınız) ve sonra 
+Data/Crops içine tohum ID’sini anahtar alarak yukarıdaki
+ alanları tanımlamalısınız. Ayrıca bitkinin her büyüme aşamasının sprite’ını 
+TileSheets/crops.png
+ veya kendi özel sprite sayfanızda sağlamalısınız. Bir mahsul normalde 4 büyüme aşaması + olgun
+ halinden oluşur, eğer 
+IsTrellis (yani 
+IsRaised alanı) true ise 2 tile boyunda resimler kullanılır
+ (çitli ürünler). Örneğin bir mod, asmabağını çitli yetişsin istiyorsa 
+IsRaised: true der.
+ IsPaddyCrop su ürünleri içindir (pirinç gibi – su yakınında daha hızlı büyürler, bu true ise). Content
+ Patcher ile mahsul eklemek için önce tohum, sonra mahsul verisini ekleyip, görselleri de 
+ekliyorsunuz. SMAPI, 
+%moddüzensiz ID’leri sayısala çevirirken 
+Load ile
+ Crops içindeki HarvestItemId’yi de
+ halleder (sizin yeni ürününüzün ID’sini orada string olarak yazdığınızda, yüklenirken tanır). 
+Ağaçlar: Meyve ağaçları 
+Data/FruitTrees.json ile tanımlıdır (her biri hangi mevsimde meyve
+ verdiği, kaç günde büyüdüğü, ürün ID’si vs.). Yaban ağaçları (meşe, akçaağaç, çam, mantar ağacı vs.) ise
+ artık 
+93
+ 94
+ Data/WildTrees ile tanımlanıyor . WildTrees verisi, modcuların yeni ağaç tipleri
+ eklemesine yarar: Örneğin yeni bir ağaç türü tanımlayıp tohum eşyası, büyüme hızı, tohum saçma
+ olasılığı, kışın yaprak döküp dökmeyeceği, kesilince odun verip vermeyeceği, hangi mevsim hangi
+ sprite’ı kullanacağı gibi pek çok detayı kontrol edebilirsiniz . Vanilla’da meşe=1, akçaağaç=2,
+ 95
+ 96
+ 9
+çam=3, mahogany=8 gibi ID’ler var; modlar string ID ile yenisini ekleyebilir. Örneğin
+ "ExampleMod_PalmTree": { ... } diye bir giriş ekleyip kendi dokusunu ve tohum eşyasını
+ tanımlayabilir. Bu veride 
+GrowthChance (büyüme olasılığı), 
+SeedSpreadChance (çevreye kendi
+ kendine tohum düşürme), 
+SeedOnShakeChance (sallanınca tohumu düşme) gibi değerler ile
+ ormanların ne kadar yayıldığını kontrol edebilirsiniz . Ayrıca 
+97
+ ağaçkakan efekti olsun mu, 
+96
+ AllowWoodpeckers ile ağaçta
+ IsStumpDuringWinter ile kışın mantar ağacı gibi kütüğe dönüşsün mü
+ 98
+ 99
+ gibi eğlenceli ayarlar mevcut . Yeni bir ağaç ekliyorsanız WildTrees dışında 
+SeedItemId ile
+ belirttiğiniz tohum eşyasını (fidanı) Data/Object’e eklemeyi unutmayın; orada genelde Category -74
+ (tohum) verilmez, ağaç fideleri ayrı bir tür gibidir ama -74 de çalışabilir. Bu tohum eşyası envanterden
+ dikilebilir olmalı; bunun için de WildTrees’te 
+SeedPlantable: true ayarı gereklidir (varsayılan true)
+ 94
+ . 
+Ekipman ve Giysiler: Yeni bir şapka, ayakkabı, giysi veya silah ekleyebilirsiniz. Örneğin şapka eklemek
+ için 
+Data/Hats dosyasına bir giriş ekleyip 
+defense ve 
+Name, Description vermek yeterlidir; bu eşyaların çoğu
+ işlevi sabittir (sadece kozmetiktir, belki birkaç şapka özel efekt içerir, bunlar hard-coded). Ayakkabılar
+ (Boots) 
+immunity değerleri içerir, eklerseniz oyunda giyilebilir. Silahlar 
+Data/Weapons
+ içinde saldırı gücü, kritik şansı, tipi (hançer/kılıç/çomak) gibi değerler içerir. Bu verileri de Content
+ Patcher ile ekleyebilir, sprite’ı da ilgili sprite sheet’e (örneğin 
+Weapons.png ) koyabilirsiniz. 1.5 ile
+ taytolar (pants) ve gömlekler de özelleştirilebilir hale geldi; bunlar dikiş tezgahında kullanılmak üzere
+ Data/Clothing içinde tanımlıdır. Yeni bir kıyafet eşyası eklediğinizde aynı ID ile 
+girdisi ve 
+Data/Clothing
+ Data/BigCraftables içinde dikiş makinesi reçetesi (mannequin mantığıyla) ayarlamanız
+ gerekebilir. Ancak bu düzeyde modlama oldukça derin konu olduğundan, geliştirici wiki’sindeki
+ “Tailoring” bölümüne başvurmak faydalı olur.
+ Makineler (Machines) ve Üretim Tarifeleri: Stardew Valley’de fırın, fıçı, pres, balık havuzu gibi
+ makineler, 
+100
+ Data/Machines.json ile tanımlanır. 1.6 ile bu veri tamamen açığa çıktı ve modlarla yeni
+ makineler eklenebilir hale geldi . Data/Machines içinde her giriş, machine object’inin Qualified ID’sini
+ anahtar alır (mesela 
+(BC)17 varil için) ve değer olarak o makinenin kuralları yer alır . Bu
+ kurallar arasında: - 
+101
+ 102
+ OutputRules : Bu makineye konulan ürünlere göre ne çıktılar üretileceğini
+ belirleyen liste. Her bir kuralın bir 
+103
+ 104
+ Id (kural adı) ve bir veya birden fazla Trigger (tetikleyici) tanımı
+ olur . Trigger şunu söyler: “Eğer makineye şunlar konursa veya şu durumda çalışırsa bu kural
+ devreye girer.” Örneğin Keg (Fıçı) için bir kural “meyve konduğunda şarap üret” tetikleyicisidir; bir diğeri
+ “sebze konduğunda turşu üret” tetikleyicisidir. - Trigger alanında 
+105
+ RequiredItemId ya da
+ RequiredTags kullanılabilir . Örneğin 
+RequiredTags: ["vegetable_item"] diyerek sebze
+ kategorisindeki tüm ürünleri kapsayabilirsiniz (oyunda içerik etiketleri mevcuttur). Bu sayede fıçıya
+ herhangi bir sebze konunca aynı kural çalışır. 
+RequiredCount ile belki birden fazla gereksinim (örn. 2
+ 106
+ adet meyve ister) belirtebilirsiniz . - Trigger’ın türü genelde 
+107
+ ItemPlacedInMachine olur, yani
+ içecek konunca tetiklenir . Bazı makinelerde 
+OutputCollected tetikleyicisi kullanılır – mesela
+ Kristalarium’da önceki değer alındığında kendini yeniler; bu output-collected olayı ile tanımlanır . 
+DayUpdate tetikleyicisi, güne başlarken makine boş ise bir çıktı başlatabilir (güneş paneli örneğin
+ sabah elektrik üretmeye başlar) . 
+109
+ 110
+ 108
+ MachinePutDown ise makine konur konmaz çalışan kural (worm
+ bin – kurtçu kutusu konunca işlem başlatır) . Modlarla yeni tetikleyici türleri bile eklenebilir ama
+ genelde bunlar yeterli. - Her OutputRule içinde 
+111
+ OutputItem listesi vardır: Bu kural tetiklendiğinde
+ ortaya çıkacak ürün(ler) burada tanımlanır . Birden fazla çıktı tanımlanmışsa, default olarak rastgele
+ birini seçer (bunu değiştirmek için 
+UseFirstValidOutput gibi bir bayrak kullanılabilir). OutputItem
+ tanımı, item spawn fields denilen genel alanları kullanır: 
+ItemId (veya 
+MinStack , 
+MaxStack , 
+PreserveType /
+ RandomItemId ), 
+112
+ 113
+ PreserveId gibi şeyler . - ItemId burada
+ üretilecek eşyayı belirtir, qualified ID veya item query olabilir. Item query çok güçlü bir özelliktir: Örneğin
+ FLAVORED_ITEM Wine DROP_IN_ID yazarsanız, fıçıya ne koyduysanız onun şarabını üret anlamına
+ 114
+ 113
+ gelir . 
+[DROP_IN_ID] token’ı, makineye konan ürünün ID’siyle yer değiştirilir. Böylece her
+ 10
+115
+ meyve için ayrı bir kural yazmak yerine tek kuralla hepsini kapsarsınız. Arı kovanında
+ NEARBY_FLOWER_ID token’i kullanılır; bu, makine etrafında bir çiçek varsa o çiçeğin ID’sini alır ve
+ Flavored Honey üretir . - 
+PreserveType ve 
+PreserveId , üretilen eşyanın “korumalı ürün” tipini
+ ayarlar. Bu, örneğin şarap veya reçel yapımında önemli: 
+PreserveType: Wine, PreserveId: 
+DROP_IN derseniz, oyun şişe üzerinde doğru etiketi gösterir (Apple Wine vs Blueberry Wine gibi) .
+ 116
+ Yine 
+ObjectInternalName içinde 
+117
+ {0} kullanımıyla, farklı tatlardaki ürünlerin yığınlanmamasını
+ sağlayacak farklı internal isimler türetilir (oyun normalde “Wine” tüm şarapları aynı sanıp istifleyebilir, bu
+ bunu engeller) . - 
+CopyColor/Price/Quality bayrakları da var; mesela mayonez makinesi
+ sütteki kaliteyi çıktıya yansıtmaz ama “Otomat” (Mayonnaise Machine) belki 
+yapabilirdi. 
+CopyQuality: true
+ CopyColor boyanabilir eşyaların rengini korumaya yarar (kristalarium bir boyalı elması
+ kopyalarsa rengini de kopyalar gibi) . - 
+118
+ 119
+ PriceModifiers ile çıktı fiyatına yüzde veya sabit
+ eklemeler yapabilirsiniz (ör. reçel fiyatı meyvenin 2 katı + 50g formülü) . Bu kural, Balanced Crafting
+ modlarında vs. kullanılabilir.- Makine verisinde bunlardan başka çalışma süresi gibi şeyler nasıl ayarlanıyor? Aslında zaman, output
+ rule ile input kombosu arasındaki bir parametre değil, fakat Data/Object’te bazı makinelerin
+ MinutesUntilReady alanı sabit. 1.6 ile sanırım bu da esnektir: Data/Machines içinde muhtemelen
+ Advanced veya Behavior kısmında 
+MinutesUntilReady veya 
+(Wiki’de 
+OutputHours benzeri bir alan var.
+ Behavior tweaks kısmı muhtemelen bunu kapsıyor.) - Makine ayrıca 
+Animation ve
+ Sound alanlarıyla çalışırken çıkardığı ses ve animasyon kareleri tanımlıyor olabilir (muhtemelen
+ Audio & visuals başlığında). Örneğin fıçının “bloop” sesi çıkarması, furnace’in ateş efekti vs. Data/
+ Machines içinde ayarlı olabilir. - 
+IndoorBehavior /
+ OutdoorBehavior vs. alanlarla, makine iç
+ mekanda farklı çalışır mı (ör. tüzük vs. yok belki). - Son olarak 
+PlayerInteraction mesajları: Boşken
+ “Örneğin: Nothing to put” mesajı, doluyken “Çıkarmak için elin dolu” vs. gibi uyarılar da Data/Machines
+ ile özelleştirilebiliyor. Yani mod ile yeni makine eklerseniz, “Makineye bir şey koymalısın” gibi özelleşmiş
+ bir mesaj da verebilirsiniz. Wizard’ın inşa ettiği büyülü makineler eklerken belki farklı mesajlar yazmak
+ isteyebilirsiniz.
+ Yeni bir makine eklemek isterseniz özetle şunları yapmanız gerekir: 1. Makinenin kendisi bir Big
+ Craftable olduğundan, 
+Data/BigCraftables ’a bir giriş ekleyip ismini, açıklamasını, satılabilirliğini,
+ vs. tanımlayın. Bu blueprint’in Robin veya büyücüde görünüp görünmeyeceğini 
+ele alacağız. 2. 
+Data/Buildings ’te
+ Data/Buildings ’e eğer inşa edilebilir bir yapı olarak eklemek istiyorsanız (ör. sulama
+ sistemi vs.), oraya bir blueprint ekleyebilirsiniz ama çoğu makine “crafting recipe” ile yapılır. Bu durumda
+ Data/CraftingRecipes dosyasına bir reçete eklemeniz gerekir (örneğin “Example Keg” tarifi: bir eksi
+ ohm + 30 tahta vs.). 3. 
+Data/Machines dosyasına, eklediğiniz BigCraftable’ın ID’sini anahtar alarak
+ kurallarını tanımlayın (yukarıda bahsedilen tetikleyici ve çıktı ayarlarını). Bu belki en karmaşık kısım ama
+ kılavuzdaki örnekleri inceleyip benzerini yapabilirsiniz. Örnek: Yeni bir “Peyniryapıcı” ekliyorsunuz
+ diyelim, bu belki farklı süt tiplerinde farklı peynir veriyor. O zaman iki OutputRule yazarsınız: biri
+ RequiredTags: ["cow_milk"] -> çıkışı İnek Peyniri, diğeri 
+RequiredTags: ["goat_milk"] ->
+ çıkışı Keçi Peyniri gibi. 4. Makinenin sprite’ını 
+Craftables sprite sheet’inize ekleyin ya da Mods altında
+ custom bir sprite sheet olarak yükleyin; Data/BigCraftables girdiğinizde 
+"TextureWidth": X, 
+"TextureHeight": Y ile kendine ait bir resim de kullanabilirsiniz. Genelde craftable’lar 16x32 piksel
+ tek kare olurlar. Fakat animasyonlu bir makineyse (ör. Crystalarium’un işlerken farklı frame’leri var),
+ Data/Machines’te 
+Frames gibi bir alan olabilir.
+ Zanaat ve Yemek Tarifleri (Crafting & Cooking Recipes): Stardew Valley’de el yapımı alet tarifleri
+ Data/CraftingRecipes.json içinde, mutfak yemek tarifleri ise 
+Data/CookingRecipes.json
+ içinde tanımlıdır. İki format benzerdir ancak küçük farklar var: Yemek tariflerinde ayrıca kimden/nereden
+ öğrenildiği ve belki buff etkileri de tek satır string içinde kodlanmıştır . Örneğin 
+120
+ içinde 
+CookingRecipes
+ "Salad": "20 1 22 1 419 1/25 5/196/f Emily 3/" gibi bir satır vardır . Bunu
+ 120
+ ayrıştırırsak: - İlk kısım 
+121
+ 20 1 22 1 419 1 salata için gereken malzemelerdir (20=Leek ×1,
+ 11
+22=Dandelion ×1, 419=Vinegar ×1). - İkinci kısım 
+25 5 galiba energy ve health recovery veya buff id
+ olabilir (Salad +50 enerji civarı verir, 25 5 belki 25 enerji 5 sağlık demek?). - Üçüncü kısım 
+196 çıkan
+ ürünün ID’si (Salad item = 196). - Dördüncü kısım 
+f Emily 3 tarifin nereden öğrenileceğini gösterir:
+ f = friend (arkadaşlık), Emily 3 demek Emily 3 kalpte iken mektupla yollar. (Gerçekten Emily 3 kalpte
+ Salad tarifini yollar). Başka bir örnek 
+l 10 gördüyseniz, 
+l = learned by level (yetenek seviyesi), 10 =
+ muhtemelen bir skill level. 
+s Luck 8 gördük, bu da Skill = Luck level 8 demek (şans bir normal skill
+ değil gerçi, belki orada S = special filan). Yani harf kodları: 
+f = arkadaş mektubu, 
+televizyon (büyük ihtimal, TV tariflerini bir sayıyla kodlamışlar), 
+l = Queen of Sauce
+ s = skill level. Örneğin 
+Bread
+ tarifinde son kısım 
+l 11 idi, Bread (Ekmek) muhtemelen TV’den Sonbahar 21’de öğreniliyor (11. tarif
+ belki).
+ İşte mod ile yeni bir yemek tarifi eklemek isterseniz, 
+CookingRecipes içine bu formatta bir satır
+ eklemeniz lazım. Ancak 1.6 ile bunlar JSON modele dönüştü mü tam bilemiyorum; belki kolaylık olsun
+ diye formatları bozmamış olabilirler.
+ CraftingRecipes benzer ama buff kısmı yok, onun yerine son kısım nerede üretilebildiği gibi bir
+ parametre alır (ör. 
+"FarmComputer": "787 1 338 10/Home/Field/" – bu demek Battery ×1 ve
+ Refined Quartz ×10 ile “Home” (yani Carpenter menüsünde) craft ediliyor? Yine emin değilim). Crafting
+ tariflerinde genelde 
+"Iron Fence": "335 1/1/4/" gibi formatlar var: demir çit için 335=Iron Bar
+ ×1, 
+/1/4/ belki “crafting tab, bigCraftable false, level 4?” vs. Vanilla’da 
+'Category' ve
+ 'BigCraftable' sahada yok belki ama yepyeni blueprint eklemek Data/Buildings ile de yapılabilir. 
+Neyse, modlamada daha kolayı: Content Patcher ile CraftingRecipe eklemek isterseniz, Editing XNB
+ yerine JSON kullanmak için 
+Dynamic Game Assets veya 
+Json Assets gibi modlar da var – bunlar
+ tarifi de ekler eşyayı da ekler. Ama kendiniz yapmak isterseniz: - 
+Data/CraftingRecipes ’e bir giriş
+ ekleyin, 
+"YeniTarif": "malzemeler.../çıkış.../Unlock..." formatında. - 
+BigCraftables veya 
+Data/
+ Data/Objects ’e de bu tarif sonucu üretilecek eşyayı ekleyin, aksi halde tarif
+ bir şey üretmez. - Eğer tarif bir CookingRecipe ise 
+Data/CookingRecipes ’e eklersiniz, ve muhtemelen
+ yiyecek buff’ını 
+ObjectInformation (Data/Object) içinde eşyada belirtmeniz gerekir. (Yemeklerin buff
+ etkileri, eşyaların açıklama metninin parçası olarak orada tanımlı: Örn. Spicy Eel objesinin açıklamasında
+ "Gives spicy buffs" vs. der).
+ Devasa Mahsuller (Giant Crops): Normalde sadece lahana, karpuz, kabak devasa büyüyebiliyordu. 1.6
+ ile Data/GiantCrops eklendi ve modcular istedikleri mahsul için devasa versiyon ekleyebilir . Bu veri
+ modelinde her devasa ürün için bir giriş var: - 
+122
+ 123
+ FromItemId : Hangi mahsulün hasat ürünü bu devasa
+ bitkiye dönüşebilir (örn. (O)254 = kavun) . Aynı mahsul için birden fazla dev varyasyon tanımlanabilir
+ (ilk eşleşen koşulları sağlayan oluşur diyor). - 
+124
+ HarvestItems : Dev bitki kırıldığında hangi eşyaların
+ düşeceği . Bu bir liste olabilir; mesela dev kavun kırılınca 15-21 normal kavun verir. Bunu item spawn
+ f
+ ields ile belirtirsiniz, isterseniz % şans veya 
+Chance parametresi ile ek eşyalar ekleyebilirsiniz. Hatta
+ Shaving (budama) enchantment ile ekstra drop ayarı yapabilirsiniz (Lumberjack’in ağaçtan ekstra
+ kereste düşürmesi gibi, dev bitkiye de budamada ekstra meyve drobu ayarlanabiliyor) . Çoğu
+ modcu buna gerek duymaz ama imkân var. - 
+Texture ve 
+125
+ 126
+ TexturePosition : Dev bitkinin sprite’ını
+ belirler (genelde 16px * tile boyutu). Varsayılan dev bitkiler 3x3 tile kaplar ve sprite’ları da 48x64 px
+ civarıdır. 
+TileSize alanıyla dev bitkinin kaç tile alan kapladığını belirtebilirsiniz (örn. bazı modcular
+ 2x2 tile dev bitki yapabilir) . - 
+127
+ 128
+ Health : Dev bitkinin can puanı (balta ile vurdukça kaçar).
+ Varsayılan 3 (iridyum baltayla 3 vuruş). Değiştirebilirsiniz. - 
+129
+ Chance : Her gece dev bitkiye dönüşme
+ ihtimali (vars default %1 yani 0.01) . Bunu artırıp azaltmak mümkün. Bir mahsul birden çok dev
+ varyant tanımlıysa (diyelim farklı mevsimde farklı dev şekli), hepsi ayrı ayrı % şansla check olur. 
+Condition : Bir GameStateQuery ile dev bitkinin çıkması için koşul belirleyebilirsiniz (örneğin
+ modunuz sadece yıl 3’ten sonra dev hal alabilsin diyebilir, veya belirli mod yüklüyse vs) .
+ 130
+ 12
+Yeni bir dev bitki eklerseniz, bunun normal mahsulünüz ile aynı 
+HarvestItemId değerine sahip
+ olmasına dikkat edin ki o mahsul tarlada 3x3 grup halinde büyüdüğünde devasa olma şansı olsun.
+ Örneğin modunuza ananas benzeri bir ürün eklediniz ve dev versiyon istiyorsunuz: 
+FromItemId
+ olarak o meyvenin ID’sini verirsiniz. Sonra dev sprite’ınızı (kendi Mods altında bir PNG) 
+Texture ile
+ belirtirsiniz. Genelde dev bitkiler 
+Tilesheets\Crops sayfasında olmuyor, ayrı dosya kullanabilirsiniz.
+ Bu esneklik, modculara festival dekorları gibi dev bitkiler ekleme imkânı da veriyor.
+ Item Queries (Eşya Sorguları): Bu, 1.6 ile gelen çok kullanışlı bir özellik. Oyun içi veri alanlarında sabit
+ bir ID yerine esnek bir ifade yazarak birden fazla eşyayı tanımlamayı sağlar . Örneğin bir dükkan
+ tanımında 
+131
+ 132
+ 133
+ ItemId: "RANDOM_ITEMS (F) @isRandomSale" yazarsanız, o dükkanda satılacak eşya
+ havuzunu “mobilyalar içinden rastgele bir eşya, eğer random satışa kapalı değilse” şeklinde tanımlamış
+ olursunuz . Oyun bunu çalışırken değerlendirir ve her seferinde farklı bir mobilya seçebilir. Item
+ query’ler Data/Shops, Machine output, GiantCrops HarvestItems gibi alanlarda kullanılabiliyor
+ (belge, hangi alanların desteklediğini belirtiyor) . Bazı örnek sorgular: - 
+134
+ 135
+ ALL_ITEMS : oyundaki
+ tüm eşyaları temsil eder (isteğe bağlı tür filtresi ve bayraklarla). Mesela 
+136
+ ALL_ITEMS (O) 
+@requirePrice derseniz tüm satılabilir nesneler (fiyatı 1g üzerinde) listelenir . 
+RANDOM_ITEMS <Type> [minID] [maxID] : Belirli bir item türünden belirli ID aralığında rastgele bir
+ eşya seçer . Örneğin 
+132
+ 133
+ RANDOM_ITEMS (WP) @isRandomSale bir rastgele duvar kağıdı verecektir,
+ RANDOM_ITEMS (O) 0 100 ise ID’si 0-100 arasında olan rastgele objeyi seçer. Dükkan örneklerinde
+ bu çok kullanışlı: Rasgele 10 tohum getiren bir mod dükkanı tanımlayabilirsiniz. - 
+FLAVORED_ITEM 
+<type> <baseID> : Az önce bahsettiğimiz gibi, flavored item üretir (örn. meyve suyu, reçel, bal vs). Siz
+ tip olarak Wine/Jelly vs. verirsiniz, arkasına da girdiyi. Hatta 
+AgedRoe için bir ekstra parametre ile
+ 137
+ “hangi balık havyarı” belirtirsiniz . - Diğer özel query’ler de var: 
+DISH_OF_THE_DAY (o gün
+ Tavernada hangi yemek menüdeyse onu verir), 
+LOST_BOOK_OR_ITEM X (eğer oyuncunun kayıp
+ kitapları bitmediyse bir kitap, bittiyse X sorgusunun sonucunu verir) . Bu özellikle modcuların şu da
+ olabilir bu da mantığını kurmasına yarar.
+ 138
+ Kısacası, item query sayesinde modlar veri dosyalarında programatik şeyler yapabilir. Eskiden bu gibi
+ esneklikler mod kodu gerektirirdi; şimdi Content Patcher bunu kendisi hallediyor. Bir örnek olarak, 1.6
+ ile gelen Sihirbazın mağazasında rasgele dekorasyon satma özelliği, tam olarak bu item query ile
+ yapıldı. Mod geliştirici bakış açısıyla, Data/Shops içinde Sihirbaz dükkanına yeni bir kategori eklemek
+ isteseniz, 
+MagicShop ilgili Entries listesine 
+ItemId: "RANDOM_ITEMS (O) ..." gibi bir ek
+ yapmanız yeterli.
+ Haritalar ve Mekânlar (Maps & Locations)
+ Stardew Valley’de haritalar (oyun mekânlarının görsel ve konumsal düzeni) 
+.tmx veya 
+.tbin
+ formatlı dosyalarla tanımlıdır. Modcular, haritaları düzenleyerek veya yeni haritalar ekleyerek oyuna yeni
+ alanlar katabilirler. Temel olarak iki yaklaşım vardır: Mevcut bir haritayı düzenlemek (ör. Pelikan
+ Kasabası’na yeni bir bina eklemek) veya tamamen yeni bir harita yaratıp oyuna eklemek (örn. yeni bir
+ zindan bölgesi, yeni bir çiftlik haritası vb.). 
+Harita Düzenleme: İçerik modlarında harita değişiklikleri genelde Content Patcher ile Load veya
+ EditMap eylemleri kullanılarak yapılır. Örneğin kasaba haritasına yeni bir NPC’nin evini eklemek
+ istiyorsanız, bu evin tile düzenini Tiled gibi bir map editörü ile hazırlayıp 
+Maps/Town dosyasına yama
+ uygulayabilirsiniz. EditMap eylemiyle var olan haritaya belirli bir layer’a eklemeler yapabilir, Load ile tüm
+ haritayı komple değiştirebilirsiniz. Harita dosyaları “XNB Editing” kapsamında olduğu için modlama
+ wikisi bunun detaylarını içerir. Önemli olan, eğer bir haritaya yeni warp noktaları, festival alanları gibi
+ özel Harita Özellikleri (Map Properties) ekliyorsanız, bunları doğru şekilde ayarlamanızdır. Örneğin bir
+ 13
+haritaya yeni bir kapı eklerseniz, o tile’ın özelliklerine 
+Action:Warp ... veya benzeri tag’ler
+ vermelisiniz. Content Patcher’da EditMap ile tek tek tile özelliklerini bile değiştirebilirsiniz.
+ Yeni Mekân Ekleme: SMAPI ile tamamen yeni bir GameLocation oluşturmak ve oyuna entegre etmek
+ mümkündür. 
+1.6 
+öncesi 
+bunun 
+için 
+C# 
+modunda
+ Game1.addLocation(new GameLocation("Assets/myMap.tmx", "MyLocationName")); gibi
+ kod yazmak gerekirdi. 1.6 ile ConcernedApe, Yeni Çiftlik Haritaları desteği ekledi ve genel olarak
+ modlarla yeni lokasyon ekleme sürecini kolaylaştırdı. Şimdi Data/AdditionalFarms adında bir varlık var
+ 139
+ ve buraya yeni çiftlik tanımları girebiliyorsunuz . Her bir giriş bir özel çiftlik tipi oluşturuyor: - 
+140
+ ID :
+ çiftlik tipinin benzersiz string ID’si . Bunu mod kimliğinizle önekleyin ki diğer modlarla çakışmasın. 
+TooltipStringPath : Oyunun “Yeni Oyun” menüsünde çiftlik seçerken görünen ad ve açıklamayı
+ 141
+ tanımlayan çeviri anahtarı . Mesela 
+Strings/UI:MyMod gibi bir key yazarsınız, sonra 
+UI.json dosyanızda 
+Strings/
+ "MyMod": "Ananas Çiftliği_Bir ananas şeklinde tasarlanmış 
+egzotik çiftlik." gibi bir değer tanımlarsınız . Burada altçizgi 
+142
+ ayırmak için kullanılıyor (oyun bunu parse ediyor) . - 
+141
+ _ karakteri, ad ve açıklamayı
+ MapName : Harita dosyanızın adı (Maps
+ klasöründe). Örneğin 
+MapName: "ExampleMod_PineappleFarm" derseniz, SMAPI 
+143
+ Maps/
+ ExampleMod_PineappleFarm.tmx dosyanızı yükler ve kullanır . Bu haritayı mod paketinizde bir
+ .tmx olarak eklemelisiniz (Tiled ile oluşturabilirsiniz). Not: Haritanızı tamamen sıfırdan yaparken,
+ vanilla çiftlik haritalarından kopya başlamak önerilir çünkü belirli yongalar, region ayarları vs. gerekiyor. 
+(İsteğe bağlı) 
+IconTexture : Yeni oyun ekranında küçük simge (22x20 px) ve 
+WorldMapTexture :
+ oyun içi dünya haritasında çiftliğin yerini gösteren resim (131x61 px) . Bunları kendi tasarladığınız
+ görsellerle doldurabilirsiniz, ya da boş bırakırsanız belki default ev ikonu kullanılır. - 
+144
+ lokasyona özgü mod verileri (bazı modlar kullanabilir), çoğunlukla boş bırakılır.
+ 145
+ ModData : Bu yeni
+ Bu AdditionalFarms girdisini ekledikten sonra modunuzun içeriğine harita dosyasını ve simgeleri
+ koymalısınız, Content Patcher ile bunları Load eylemiyle yukarıda tanımlanan yollarına yüklemelisiniz
+ . Yukarıdaki örnekten görüleceği üzere, 
+FromFile: "assets/{{TargetWithoutPath}}.png"
+ gibi bir hileyle tek eylemde hem Icon hem WorldMap görselini yüklemek mümkün (TargetWithoutPath
+ burada 
+Icon ve 
+WorldMap ’i sırasıyla mod ID ile değiştirip asset klasöründen yüklüyor) .
+ Yeni bir çiftlik haritası eklerken, Map Properties ayarları çok kritik: - Haritanın 
+146
+ .tmx dosyasında, Warp
+ ve Entry gibi özellikler oyuncunun nerede doğacağına karar verir. Örneğin 
+BackwoodsEntry
+ property’si, oyuncu arka ormandan çiftliğe girerken duracağı yeri ayarlar, 
+147
+ MailboxLocation posta
+ kutusunun koordinatını ayarlar vs . Vanilla çiftliğinden bu değerleri alıp kendi haritanıza
+ kopyalamalısınız, yoksa oyuncu yanlış yerde spawn olabilir veya posta kutusu havada kalabilir. 
+FarmHouseLocation vs. gibi ev içi konumları ayarlayanlar var. - 
+Fishing ile başlayan özellikler,
+ çiftlikteki balık tutulacak alanları, hangi balıkların çıkabileceğini belirler (1.4’te eklendi; orman çiftliğinde
+ farklı balıklar gibi). Yeni çiftliğinizde bunları tanımlamazsanız, default olarak standart çiftlik verileri
+ kullanılır, ama belki su yoksa vs. elle ayarlamak istersiniz. - 
+Forage ve 
+büyüyen ot, kütük, forage item vs. sayısını kontrol eder.
+ Spawn ile başlayanlar, çiftlikte
+ Neyse ki 1.6 ile ConcernedApe modculara kolaylık olsun diye Data/Locations üzerinden de özelleştirme
+ imkanı sundu. Yukarıda 
+Farm_{{ModId}}_PineappleFarm adında bir giriş eklediler . Eğer
+ Data/Locations dosyasına, kendi çiftlik ID’nizle başlayan bir key ekleyip bir JSON obje verirseniz, o
+ çiftlik haritasının game code’daki parametrelerini override edebilirsiniz . Örneğin: - 
+149
+ 148
+ DisplayName :
+ Haritanın ismi (tokenizable olmalı, default formül FarmName ile karışık bir dize) . Genelde bunu elle
+ değiştirmeye gerek yok; 
+150
+ [FarmName] token’i çiftliğe oyuncu verdiği ismi koyar. - 
+CanPlantHere : true
+ olmalı, yoksa ekin ekilemez (default true). - 
+CreateOnLoad : null kalmalı, aksi halde duplicate location
+ oluşabilir (burası teknik, default’da zaten null bırakın) . - Bunlar dışında asıl Data/Locations
+ içindeki alt alanlar: Forage spawn’ları, artifact spawns, balık listeleri vs. Genelde AdditionalFarms
+ 151
+ 152
+ 14
+girmediğiniz her şeyi default çiftlikten alır ama siz override ile değiştirebilirsiniz. Yukarıdaki örnekte
+ MinDailyWeeds , 
+MaxDailyWeeds vs. ayarlanmış mesela – bu, her gün kaç adet yabani ot
+ çıkabileceğini belirler
+ 153
+ . ArtifactSpots listesine vanilla default veriler eklenmiş (Coal vs. listesi) .
+ 154
+ Eğer yeni mekanınız çiftlik gibi default bir tip değil de bambaşka bir yerse (mesela yeni bir mağara, ada
+ vs.), AdditionalFarms sistemi dışında, eski yöntemle bir C# modun 
+Game1.addLocation çağırması
+ gerekebilir. Ancak mod topluluğunda yaygın modding API’ları (Content Patcher Extended veya custom
+ location loader modları) mevcuttur, böylece veri odaklı eklemek mümkün olabilir. 1.6’da AdditionalFarms
+ dışında 
+Locations yapısında custom key’ler var mı belirsiz, belki Future update’lerde genel custom
+ location desteği de gelir.
+ Dünya Haritası (World Map): Oyunun ESC menüsündeki dünya haritası da modlanabilir. 
+156
+ 157
+ 155
+ 156
+ Data/
+ WorldMap.json bu amaçla eklendi ve modlar buraya kendi bölgelerini, harita üzerindeki araç
+ ipuçlarını vs. ekleyebiliyor . WorldMap verisi, “region” denilen geniş alanları ve onların altındaki
+ “map area” parçalarını tanımlar. Örneğin vanilla’de tek bir region var (Valley), ama Ginger Island gibi ayrı
+ bir region eklenebilirdi. Her bir bölge kendi temel harita dokusunu (BaseTexture) ve alt alanlarını içerir
+ . Alt alanlar (MapAreas) belirli dikdörtgen bölgelerle tanımlanır; bu bölgelerin: - Tooltip (haritada
+ imleç gelince çıkan isimler), - ScrollText (haritanın altında kayan açıklama yazısı), - Textures (üzerine
+ bindirilen resim parçaları, örn. çiftlik tipi sprite’ı) - WorldPosition (bu area’nın bir GameLocation ile
+ eşleşmesi için kullanılan tile koordinatı) gibi alanları vardır .
+ 158
+ 159
+ Yeni bir çiftlik haritası eklediğinizde, AdditionalFarms ile world map texture verdiyseniz, SMAPI bunu
+ otomatik ekler mi bilmiyorum ama ihtimal, 
+WorldMapTexture parametresi direk Data/WorldMap’e
+ entegre oluyor. Eğer kendi başınıza bir lokasyon ekliyorsanız, Data/WorldMap’e el atmanız gerekebilir.
+ Örneğin modunuz kasaba haritasını genişletti (yeni bir mahalle), orayı dünya haritasında göstermek
+ isterseniz, 
+162
+ Valley region altına yeni bir MapArea eklersiniz: PixelArea ile harita üzerindeki konumunu,
+ Condition ile belki mod yüklüyse göster gelsin şeklinde ayarlayabilirsiniz . Hatta LeftNeighbor/
+ RightNeighbor gibi alanlarla gamepad ile harita gezinirken imlecin nereye atlayacağını belirtebilirsiniz
+ . Bu oldukça ayrıntılı bir veri; modlama wiki’sinde bir örnek de gösteriliyor. 
+160
+ 161
+ Örnek olarak, Stardew Valley Expanded modu kendi özel bölgelerini dünya haritasına eklemek için
+ eskiden bu imkân yokken hacky işler yapıyordu; 1.6 ile direkt Data/WorldMap sayesinde kendi region’ını
+ ekleyip harita fragmentlerini oraya tanımlayabilir, oyuncu mod yüklü değilse vanilla harita kalır, yüklüyse
+ ek alanlar çıkar.
+ Diğer Mekân Sistemleri: Data/Locations dosyasından bahsettik. Burada sadece çiftlik değil, oyundaki
+ her mekan (örn. Town, Forest, Beach vs.) için parametreler var. Sadece data ile modlama kapsamında en
+ önemlileri: - Forage alanları: Hangi mekânda mevsime göre hangi yabani itemler spawn oluyor (örn.
+ Cindersap Forest’ta ilkbahar filizi, kış kökü vs. listesi Data/Locations içinde). - Fish verileri: Bazı
+ mekânların balık havuzları Data/Locations’da tanımlıdır (örn. Secret Woods göletinde sadece carp çıkar
+ vs.). - Crane Game & Mine level generation gibi özel alt sistemler de Data/Locations’da duruyor
+ (muhtemelen modlamazsınız). - Eğer modunuz yeni bir mekan eklediyse, onun 
+Data/Locations
+ girdisini default bir yer baz alınarak ekleyebilirsiniz. Mesela “Mines_ExampleMod_CustomCave” diye bir
+ mekan eklediniz, Data/Locations’da “Mine” benzeri entry ekleyip parametrelerini belirlersiniz (merdiven
+ nereye çıkacak vs.). Ama bu ileri modlama, burada çok detaya inmeyelim.
+ Sonuçta, harita ve konum modlamada en önemli yenilik 1.6 ile Yeni Çiftlik türleri desteği oldu; bunu
+ kullanarak modcular kolayca farklı temalı çiftlikler sunabilir. Bunun dışında festival modlama (egg
+ festivaline yeni yarışmacılar eklemek, ya da tamamen yeni bir festival oluşturmak) hâlâ daha karmaşık
+ bir alan ama Data/Festivals dosyaları düzenlenerek bir yere kadar yapılabilir. PassiveFestivals diye bir
+ 15
+kavram da var (Night Market gibi birkaç gün süren, kısmen serbest etkinlikler). 1.6 ile 
+Data/
+ PassiveFestivals eklendi, bu da muhtemelen modcuların yeni pasif festival (mesela birkaç gün
+ süren bir etkinlik) eklemesine olanak tanır. Bu veri, festival ID’siyle tarih aralığı, hangi haritaların
+ süsleneceği vs. içerir. Çok modlanmış bir alan değil ama ilgilenenler wiki’de PassiveFestivals sayfasına
+ bakabilir.
+ Bir mod geliştiricisi olarak haritalarla uğraşacaksanız mutlaka Tiled harita editörünü öğrenmelisiniz.
+ Map’teki warping, tile index’leri, layer adları vs. tam doğru olmalı ki oyun sorunsuz çalışsın. Örneğin
+ Buildings layer’ındaki passability vs. 
+Back layer’ı, 
+Paths layer vs. hepsi tanımlı olmalı. Neyse ki
+ toplulukta halihazırda Harita düzenleme rehberleri mevcut. Yeni bir harita ekledikten sonra
+ Game1.warpFarmer("MapName", x, y, facingDir) kodunu bir yerden tetikleyerek oyuncuyu
+ oraya gönderebilirsiniz (örn. bir kapı Action ile). Veya konsolda 
+debug warp MapName x y komutunu
+ kullanarak test edebilirsiniz.
+ Diğer Oyun Sistemleri (Buff’lar, Binalar, Görevler vs.)
+ Stardew Valley’nin modlanabilir içeriklerinin geri kalanını bu bölümde ele alalım. Bunlar, NPC’ler veya
+ temel eşyalar kadar bariz olmayabiliyor ama mod geliştirirken karşılaşabileceğiniz alanlar:
+ Buff’lar: Oyunda yiyeceklerin veya iksirlerin verdiği geçici etkiler Buff sistemiyle yönetilir. Örneğin Kahve
+ içince +1 Hız buff’ı, Çiftlikçi Lokantası yediğinizde +2 Çiftçilik vb. Bu efektler sabit ID’lerle tanımlıdır
+ (Buff
+ IDs 12=Hız, 11=Savunma vs.) ve 
+Data/Buffs dosyasında buff isimleri ve ikon index’leri
+ tanımlanmıştır. 1.6 ile Buff verisi de genişletilmiş olabilir (modcular yeni buff türleri ekleyebilir mi emin
+ değiliz; belki buff ID < 12 ise skill buff, >= 12 stat buff vs. diye bir limit vardır). Ancak Content Patcher ile
+ buff eklemek diye bir olay duymadım – buff’lar genelde mod koduyla yaratılıyor. Mesela bir mod,
+ oyuncuya 
+yeni 
+bir 
+iksir 
+içirip 
+özel 
+bir 
+buff 
+vermek 
+istiyorsa, 
+SMAPI’nin
+ Game1.buffsDisplay.addOtherBuff(new Buff(...)) metodunu kullanır. Bu nedenle buff
+ konusunu çok uzatmadan geçiyorum. Yine de, BuffFood eşyaları (yemekler) eğer modla ekliyorsanız,
+ ObjectInformation açıklama alanında buff parametrelerini doğru eklemelisiniz: Formül 
+food: 
+health: combat: mining: farming: fishing: luck formatındadır. Örneğin +2 luck ve +3
+ farming veren bir yemek, açıklamasının sonunda "2 0 0 3 0 0 0" gibi bir dizi içerir. Bu teknik detay
+ modding wiki’de “Buff data” diye geçiyor, modcular oradan bakarak kendi yiyeceklerine buff ekleyebilir.
+ Binalar (Çiftlik Binaları): Oyuncunun Robin veya Büyücü aracılığıyla inşa edebildiği yapılar (Kümes,
+ Ahır, Silo, vs.) modlanabilir. 1.6 öncesi bunları eklemek tam olarak mümkün değildi (ancak SMAPI
+ üzerinden hack’ler gerekiyordu). Şimdi 
+163
+ Data/Buildings varlığı sayesinde kendi çiftlik binalarınızı
+ tanımlayabilirsiniz . Bu veri, bir bina blueprint’inin mağazada nasıl görüneceğini, inşa maliyetini,
+ gereçlerini, harita dosyalarını vs. içerir. Başlıca alanlar: - 
+Name : Bina iç kod adı. - 
+Description :
+ Mağazada görünen adı ve açıklaması (tokenizable string, ad ve açıklama 
+_ ile ayrılmış) . 
+Texture : Bina dış görünüşünün sprite’ı (Content klasöründe bir resim dosyasına path) . Genelde
+ bu 
+164
+ 164
+ Buildings.png gibi bir sprite sheet’in parçası da olabilir, ama modla özel path vermek daha kolay.
+ 165- Builder: Bu binayı kim inşa ediyor (Robin veya Wizard) . Wizard için farklı menü stili var ve
+ anında inşa (MagicalConstruction) seçeneği var. Hatta yeni bir builder NPC’si eklerseniz, eğer o mod
+ menüyü destekliyorsa 
+Builder: "Andy" gibi bile girebilirsiniz. - 
+BuildCost (altın maliyeti) ve
+ 166
+ BuildMaterials (gerekli malzemeler listesi) . Malzemeler listesinde her biri 
+167
+ Amount içerir, ayrıca bir 
+ItemId ve
+ BuildCondition konulabilir (belirli bir mod aktifse ancak inşa edilsin vs.)
+ 168
+ . BuildDays de var, 0 ise anında biter, 1 ise ertesi gün biter vs . - 
+169
+ AdditionalPlacementTiles :
+ Bu, binayı yerleştirirken bina boyutu dışında da temiz olması gereken tile’ları tanımlar . Örneğin evin
+ önündeki merdiven için kullanılır; merdiven bir tile dışarı taşar ama orada yol olsa da kurulum
+ engellenmesin diye “OnlyNeedsToBePassable: true” ile eklerler . - 
+171
+ 170
+ IndoorItems : Bina inşa edilince
+ 16
+172
+ veya yükseltilince iç mekana eşyalar koymak isterseniz burada belirtebilirsiniz (ör. kulübe inşa edilince
+ sandık eklemek gibi) . Bu, item listesi (ItemId, Tile X, Y, Indestructible vs.). 
+MagicalConstruction : true ise, inşa anında tamamlanır ve menü mystic tema olur (Wizard’ın
+ 173
+ Obsidian yapıları gibi) . - 
+174
+ AddMailOnBuild : Bina ilk kez yapıldığında oyunculara mektup
+ gönderebilir (ör. Slime Hutch ilk inşa edilince Marlon’dan mektup geliyordu). Buraya letter ID listesi
+ girersiniz .
+ 175
+ Bunlar temel blueprint verileri. Devamında Upgrades (Yükseltmeler) kısmı var: 
+BuildingToUpgrade : Bu blueprint, hangi binanın yükseltmesi olduğunu belirtir (örn. Big Coop için
+ “Coop”) . Bunu koymazsanız, bina bağımsız inşa seçeneği olur. Koyarsanız, o temel bina inşa
+ edilmişken Robin menüsünde “Upgrade” olarak çıkar. - 
+IndoorItemMoves : Yükseltme yapılırken
+ içerdeki eşyaların yerini değiştirme kuralları tanımlar . Mesela ev yükseltirken buzdolabının
+ koordinatını değiştiriyor. Belirli bir kaynaktan alıp hedefe koymak için Source ve Destination tile’ları
+ 176
+ belirlersiniz, eğer area ise Size ile tanımlarsınız . - 
+177
+ UpgradeSignTile vs. : Robin yükseltme
+ yaparken binanın üzerinde bir tabela çıkar, onun pozisyonu ve yüksekliği gibi ayarlar. Örneğin kulübe
+ upgrade edilirken belki başka bir yerinde belirir. Bu, çok kritik değil modlar için, default kalsa da olur
+ (Shed türüyse 5,1 yoksa 0,0 default) .
+ 178
+ Bina Davranışı: Sonraki bölümde bina boyutu ve kapıları vs. geliyor: - 
+179
+ Size : Binanın çiftlikte kapladığı
+ tile genişlik ve yüksekliği . Default 1x1, ama siz doğru değerini girin (ör. Coop 6x3). 
+CollisionMap : Bu belki en güzel özellik, ASCII sanatla binanın hangi karelerine basılabilir hangilerine
+ basılamaz tarif ediyorsunuz
+ 180
+ XXXX
+ XOOX
+ 181
+ . Örnekte stable (ahır) için 
+verilmiş
+ 182
+ . Bu, 4 genişlik 2 yükseklikte bir harita (ahır 2x4 demek), ilk satır tüm 4 tile blok, ikinci satır
+ ortadaki 2 tile open (insan yürüyebilir) demek. Yani stable’ın ön cephesindeki iki tile kapısı var. Oyun bu
+ haritayı okuyor ve gerçek collision ile birleştiriyor. Biz modcular için, eğer mod bir bina eklerse ve garaj
+ gibi kapısı varsa, oranın geçilebilir olduğunu bu map ile belirtebilir. - 
+için tıklanacak kapının tile konumu
+ 183
+ HumanDoor : Binanın içine girmek
+ . (Relative to top-left). Örn. Coop 1 tile soldan offset, vs. - 
+AnimalDoor : Eğer bina hayvan barınağıysa, hayvanların girip çıktığı kapının konum ve boyutu .
+ Mesela Coop’ta 1x2 bir kapı alanı vardır, X,Y,Width,Height ile tanımlanır. - 
+184
+ AnimalDoorOpenDuration :
+ Açık kapı animasyonunun kaç milis sürdüğü vs. (görsel olarak önemli değil belki, default 0.3 sn filan). - 
+CanSpawnAnimals : Bu bina hayvan barınağı mı? (Muhtemelen interior’i AnimalHouse ise ve
+ AnimalDoor tanımlıysa true olur). - 
+DaysOfConstructionLeft : Bu belki upgrade anında kullanılır,
+ emin olamadım.
+ Bina Dış Görünüm & İç Mekan: - 
+MapWidth/MapHeight : Binanın iç mekan haritasının boyutu (tile
+ cinsinden). Örneğin Coop içi 11x9 tile. - 
+InteriorMap : Bina iç mekânının asset yolu. Örneğin Coop
+ "Maps/Coop" haritasını kullanır. Siz modla bir Shed benzeri depo ekliyorsanız, kendi interior .tmx
+ dosyanızı verirsiniz. Veya eğer hayvan barınağı ise "AnimalHouse" base map’ini (kümes/ahır share eder)
+ kullanabilirsiniz. - 
+InteriorSettler belki bir parametre? (Farmhouse vs. Shed vs. Barn tiplerini
+ ayırmak için). - 
+FurniturePositions : Eğer bu bina bir 
+Shed ise, içinde default mobilya pozisyonları
+ vs. olabilir, belki bu alan doldurulabilir. - vs. vs.
+ Veri çok, ama pratikte modla bir bina eklerken template olarak bir existing blueprint alıp kopyalamak en
+ iyisi. Örneğin modunuz “Garage” diye bir bina ekleyecek: Stabl (horse stable) blueprint’ini Data/
+ Buildings’ten alıp değiştirirsiniz (fiyatını, boyutunu, iç mekanını vs.). Sonra 
+Texture olarak kendi garaj
+ 17
+dış sprite’ınızı verirsiniz, 
+MapWidth/Height , 
+InteriorMap ayarlarını belirlersiniz. Robin’den mi
+ wizard’dan mı inşa edilecek karar verirsiniz (Wizard’dan ise Magical yapsanız iyi olur). Tabii ki mod
+ paketine garaj iç mekanı haritası (Maps/Garage.tmx gibi) ve belki iç/dış sprite PNG’lerini eklersiniz.
+ Topluluk Merkezi Paketleri (Bundles): Data/Bundles dosyası, Community Center’ın ve Joja paketlerinin
+ içeriklerini tanımlar. 1.5 ile bunun formatı JSON’a geçti ve modcular epey oynamaya başladı. Bu veri, oda
+ bazında paket listelerini ve her paketin gerektirdiği itemleri, miktarları, ikon pozisyonlarını vs. içerir.
+ Örneğin Crafts Room’un Bahar Forage paketi, 4 item ister (dağ porsuğu, yabani şalgam vs.), bunlar
+ hazırlanmış çeviri metni içinde tanımlıydı. 1.6 öncesi bu hack zordu, fakat 1.6 ile 
+Data/Bundles
+ modulize oldu mu emin değilim, belki hala yazılı string parse ediliyor. Yine de, modcular Content
+ Patcher ile EditData kullanarak 
+Data/Bundles ’daki listeleri değiştirebiliyordu. Örneğin Expanded mod,
+ yeni paketler ekliyor veya mevcutları değiştiriyor. Bir mod geliştirici olarak, oyunun dengesini veya
+ hedeflerini değiştirmek isterseniz, örneğin “Balık Paketi artık 5 yerine 3 balık istesin” diyorsanız, 
+Data/
+ Bundles ’da ilgili paketin item listesini düzenleyebilirsiniz. Bu veri formatı kabaca: 
+{
+ }
+ "6": {
+ "0": "Spring Foraging Bundle/4 16 1 18 1 20 1 22 1/Spring Seeds/30/0",
+ ...
+ },
+ ...
+ gibi id’ler altındaydı. 1.6 belki JSON modellemiş olabilir: bundle tanımı = {Name, RequiredItems[],
+ Reward, RewardAmount, Color} vs. . O detay wiki’de “Modding:Bundles” sayfasında bulunabilir. Yine de,
+ modlaması en riskli alanlardan biri CC paketi – zira çok sayıda event, mektup vs. bunlarla alakalı. Bir
+ paketin ID’sini kaydırırsanız (6 olan Crafts Room vs. 13 olan Theatre vs.), kod eşleşmez. Bu nedenle
+ modlar genelde var olan paketleri değiştirip yeni eklemiyorlar. Advanced modcular, Custom Community
+ Center mod vb. ile yenisini dahi yapıyor ama bu epey advanced.
+ Balık Göleti (Fish Pond) Görevleri: Balık havuzlarında belirli eşiğe gelince görev istiyorlar (örn. 3 balığa
+ ulaştı, bir alet istiyor). Bu veriler 
+Data/FishPondData.json dosyasında. Mod ile yeni bir balık
+ eklediyseniz (mesela efsane bir balık) ve havuz desteği eklemek istiyorsanız, oraya bir giriş girip o
+ balığın isteklerini ve çıkardığı özel eşyaları (örtü su birikintisi vs.) tanımlamanız gerek. Bu veride
+ "ProducedItems" ile havuzun biriktirdiği mallar (ör. Sübye havuzu squid ink üretir),
+ "RequiredItems" listesi ile 1. istem, 2. istem vs. tanımlanır. Content Patcher ile tabii ki eklenebilir.
+ Çöp Kutuları: Kasabadaki çöp kutularına mod ile yeni çöp itemleri eklenebilir mi? Evet, 
+Data/
+ Trash.yaml var (1.4’te bakmıştım). Orada hangi kutudan hangi item hangi şansla çıkar yazılı. Eğer
+ mod ile bir kasaba alanı eklerseniz ve oraya da çöp kutusu koyduysanız, Data/Trash içinde o lokasyona
+ bir giriş ekleyip item listesi verebilirsiniz. Mesela SVE modunda “Aurora Vineyard” diye bir harita var ve
+ orada çöp varil varsa belki bunu eklediler. Basit bir modcu belki “çöpten daha iyi şeyler çıksın” ayarı
+ eklemek isteyebilir – bu dosyayı EditData ile düzenleyebilir. 
+Telefon Mesajları: 1.5 ile gelen telefon sistemi, NPC’lerin belirli koşullarda araması üzerine bir replik
+ okuyor. Bu replikler 
+Data/TelephoneMessages.json içinde. Yapı: NPC adı -> mesaj listesi. Her mesaj
+ bir şart ve metin içerir. Modlar buraya yeni mesaj ekleyebilir, hatta yeni NPC’leri için arama mesajları
+ tanımlayabilir. Örneğin mod NPC’niz bazen arayıp hal hatır sorsun isterseniz, 
+EditData ile onun adını
+ ekler, Condition (belki 6+ kalp ve Salı günü evdeyse gibi) ve Text verirsiniz. Telefon modlama belki çok sık
+ 18
+yapılmıyor ama imkanı var. Condition formatı muhtemelen Content Patcher condition gibidir (HasFlag
+ vs.), wiki’de varsa oradan bakılabilir.
+ Maden Arabaları (Minecarts): Madendeki araba ağı, Demiryolu ↔ Maden ↔ Kasaba ↔ BusStop hattı,
+ Data/Minecarts dosyasında var. Eğer mod, minecart ağına yeni bir durak eklemek isterse, burayı
+ düzenleyebilir. Mesela SVE’de modun kendi yeni mekanlarına minecart ekliyor olabilir. Yapı basit:
+ location isimleri listesi, mapping vs. Bu, modlaması kolay bir veri.
+ Canavar Avcılığı Hedefleri: Maceracılar Loncası’nın asma kilit panosu (kaç slime öldürdün vs.) verisi
+ Data/MonsterGoals olarak tanıtıldı (1.6 patch notes’ta gördüm). Bu data ile modcular, eğer oyuna
+ yeni düşman eklediyse lonca defterine onu da ekleyebilir. Mesela SVE yeni canavarlar getiriyor, bunlar
+ için de birer hedef koyuyor. Data/Monsters belki canavarın drop item, HP vs. de içerir. Evet, 
+Data/
+ Monsters.json var, her canavarın adı: "Health/Damage/Exp/..../Drops". Bu 1.5’te eklendi, modcular
+ yeni canavar tanımlarken kullanıyor. 1.6 ile belki 
+%Her şey data felsefesi ile MonsterGoals ve zafer
+ ödülleri (Marlon’un hediyesi ne) vs. hepsi data oldu. Bu sayede belki Custom Companion NPC modları
+ “Galaksik boyut bıçağı” gibi yeni lonca ödülleri koyabilir. Ama pratikte, bunlar epey advanced modların
+ konusu.
+ Mektuplar (Mail): Oyunda belirli koşullarda gelen mektuplar 
+Data/Mail.json içinde tanımlıdır. Bu
+ veri her mektuba bir unique key atar, içeriği ve şartlarını belirler. Modlar yeni mektup eklerken bu
+ dosyaya bir giriş ekleyip, mektubun metnini (çeviri destekli) ve varsa ekli item vs. belirtirler. Örneğin,
+ mod NPC’nizin tanıtım mektubu varsa, oyuna ilk yüklendiğinde 
+Data/Mail e 
+"ModNPCIntroduction": "Hay, ben yeni kasabalı.../%item object 773 1" benzeri bir
+ satır eklersiniz. Yine Condition bu string’in başında 
+{{condition}}# şeklinde olabiliyordu 1.5’te. 1.6
+ belki 
+Data/Mail i JSON’a geçti (patch note'ta öyle diyordu). Koşullar muhtemelen GameStateQuery
+ formatında konmuştur. Örnek: 
+"when": "{{PlayerHasSeenEvent: <ID>}}" gibisinden. Mektup
+ modlaması çok yaygın: modcular festival sonlarında hediye yollama, NPC belli kalpte hediye yollama vs.
+ kullanıyor. Bu bakımdan Content Patcher ile mektup eklemek/düzenlemek oldukça destekleniyor. Hatta
+ SMAPI’nin LetterMenu API’si ile anlık mektup da yollayabilirsiniz. 
+Dükkanlar (Shops): Oyundaki mağaza envanterleri 
+Data/Shops.json ile tanımlıdır. Örneğin Pierre,
+ Yıl 2 baharda patlıcan satar vs. hepsi orada. 1.6 ile bu yepyeni bir formata kavuştu ve modcular
+ parametrelerle shop item ekleyebiliyor. Basitçe, her dükkanın bir listesi var, her item
+ {ItemId, Price, Stock, [Conditions]} şeklinde. Bu itemIDs field artık item query destekli
+ dedik. Mesela: 
+"AdventureGuild": [
+ {
+ "ItemId": "ALL_ITEMS (W) @requirePrice",
+ "PurchaseFrom": "Marlon"
+ }
+ ]
+ gibi bir mod girişi, tüm fiyatı >0 olan silahları Maceracılar Loncası’nda Marlon’dan satın alınabilir yapardı.
+ (Bu bir fantezi örnek). Content Patcher ile modcular EditData yaparak 
+Data/Shops listelerine Entries
+ ekleyebiliyor veya var olanı değiştirebiliyor. Hatta When şartı ile mevsime göre ürün eklemek vs. de PC
+ tarafında yapılabilir ama Data/Shops kendisi de condition alıyor mu bakmak lazım. Yine de modcular 
+yeni bir dükkan arayüzü açamaz sadece veri ile, bir mod-coded menü gerekiyor. Ancak var olan
+ dükkanlara item eklemek, fiyat değiştirmek tipik bir işlemdir. Mesela modunuz bir sulama makinesi
+ 19
+eklediyse, Robin’in dükkanında satılsın isteyebilirsiniz: 
+EditData Target:"Data/Shops" Entries: 
+{ "Carpenter": [ { "ItemId": "YourMod_Sprinkler", "Price": 5000 } ] } . Bu sayede
+ Robin menüsüne eklenir (Robin = Carpenter menu’su).
+ Special Orders (Özel Emirler): 1.5 ile gelen büyük görevler (Kent'in “Sıklamen yetiştir” gibi) 
+Data/
+ SpecialOrders/ altındaki dosyalarla tanımlıdır. Her özel görev bir JSON dosyasıdır ve bir dizi hedef,
+ ödül, hikaye metni içerir. Modcular yepyeni özel görevler oluşturabilir. Content Patcher ile belki
+ eklenemez (çünkü bunlar kendi dosyaları, ama Load ile eklenebilir). SMAPI 3.13 ile Special Order API’si
+ açılmıştı. CA 1.6’da belki Data/SpecialOrders indexi getirmiş olabilir, tam bilmiyorum. Ama SVE modunun
+ ek special order’ları var mesela, bunlar aynı sistemle eklendi.
+ Diğerleri: Monster Eradication Goals yukarıda bahsettik, Tailoring (Dikiş tarifleri)
+ Data/Tailorings ile
+ her bir giysi kombinasyonun ne üreteceği tanımlı, mod ile yeni kıyafet eklerken belki eklersiniz.
+ Achivements (Başarımlar) 
+Data/Achievements modlanabilir (yeni bir başarı ekleyip Steam’e
+ yansıtamazsınız belki ama oyunda var sayılabilir). Music / Jukebox parça listesi 
+Data/Jukebox ile
+ eklenebilir; modunuz özel bir müzik eklediyse Jukebox’ta çalınsın diye oraya ekleyebilirsiniz. Mine loot
+ Data/MineLevels ile modlanabilir (yeni maden katmanları ekleme vs. advanced). Qi Challenges
+ Data/QiChallenges belki eklendi? Mr. Qi Special Orders listesi vs. Neyse, hepsine girmeyelim.
+ Görüldüğü üzere, Stardew Valley’in hemen hemen her oyun sistemi artık data-driven hale geldi. Bu da
+ demek oluyor ki SMAPI içerik modları ile birçok değişikliği programlama yapmadan halledebilirsiniz.
+ Bu sistemlerin her birini burada tam kapsamlı anlatamasak da, ihtiyacınız oldukça Stardew Valley
+ Wiki’deki modding bölümünde özel sayfalarda format ve örnekler bulabilirsiniz. Ayrıca topluluk
+ forumları ve Discord sunucuları da spesifik senaryolarda yardımcı oluyor.
+ Modlama Araçları ve Kaynakları
+ Türkçe topluluk modlamaya yeni adım atanlar için bazı ipuçları ile bitirelim:
+ • 
+• 
+• 
+• 
+SMAPI Logları ve Hata Ayıklama: Mod geliştirirken en iyi arkadaşınız SMAPI’nin konsolu ve log
+ dosyası olacaktır. Yukarıda bahsettiğimiz 
+Monitor.Log ile kendi çıktılarınızı ekleyin. Kodunuz
+ çalışmazsa ya da Content Patcher bir hatayla modunuzun patch’ini uygulamazsa, SMAPI log
+ dosyasına bakın. Geliştirme aşamasında 
+LogLevel.Debug ile bol bol bilgi yazdırıp durumu
+ analiz edebilirsiniz. Oyunu pencere modunda başlatıp SMAPI konsolunu kenarda gözetlemek de
+ iyi bir pratik.
+ SMAPI Log Yükleyici: Kullanıcılarınız modla ilgili bir sorun yaşadığında genelde SMAPI logunu
+ paylaşmalarını istersiniz. https://smapi.io/log sitesine log dosyasını atıp size link verebilirler. Bu
+ log, modlarınızın yüklendi mi, hata verdi mi, çakışma var mı gösterir. Siz de kendi testlerinizde
+ logu inceleyip beklenmeyen uyarıları fark edebilirsiniz. Örneğin “No such asset” hatası
+ görürseniz, belki Content Patcher’da Target yolunu yanlış yazdınız demektir.
+ JSON Validator: Content Patcher paketleri veya diğer mod JSON dosyaları için sintaks hatalarını
+ yakalamak önemli. smapi.io’da basit bir 
+JSON validator aracı var, modunuzun content.json veya
+ manifest.json’ını oraya yapıştırıp hata olup olmadığını hızlıca görebilirsiniz. Bu, özellikle virgül
+ unutmak gibi hataları hemen ortaya çıkarır.
+ İçerik Dizini Arama: Çok modlu bir ortamda, belli bir ID veya içerik kimin eklediğini bulmak zor
+ olabilir. smapi.io’nun “Mod içerik arama” aracı, ID veya token aratarak hangi modun eklediğini
+ 20
+bulduruyor (özellikle büyük ID listesi devri bitti ama UniqueID çakışması filan belki debug etmek
+ gerekebilir). Yine SMAPI logu modların content patch’lerini listeler, oradan da anlayabilirsiniz.
+ • 
+• 
+• 
+• 
+• 
+IDE ve Geliştirme Ortamı: C# ile SMAPI mod yazacaksanız, Visual Studio 2019+ veya Rider veya
+ VS Code (C# eklentili) gibi bir geliştirme ortamı kullanın. Stardew Valley’nin referans
+ assembly’lerini (Game, SDV) ve SMAPI DLL’ini projenize referans vererek mod projesi
+ oluşturmalısınız. Resmi modlama wiki’sindeki Getting Started (SMAPI modları) rehberi size adım
+ adım proje oluşturmayı gösterir . Ayrıca IDE Reference sayfasında Visual Studio ve VSCode için
+ 185
+ ipuçları var. Projenizde 
+Debug ve 
+Release yapı yapılandırmaları olur; debug moddayken ister
+ VS’den F5 ile (SMAPI’yi debug amaçlı başlatabilirsiniz), ister oyunu normal açıp Visual Studio’dan
+ Attach to process yaparak modunuza breakpoint koyabilirsiniz. Hata ayıklamanın lüks bir yolu,
+ VS’de kodu adım adım yürütmektir – bunun için SMAPI konsolu açıldıktan sonra VS’de 
+Stardew 
+Valley sürecine bağlanmak gerekiyor. Bu ileri seviye bir konu ama bilmekte fayda var.
+ XNB Düzenleme (Eskimiş Yöntem): SMAPI çıkmadan önce modlar doğrudan XNB dosyalarını
+ değiştiriyordu. Hâlâ bazı eski modlar “XNB mod” diye dağıtılabilir ancak tavsiye edilmez .
+ XNB modları oyunun içerik dosyalarını kalıcı değiştirir, çoğu zaman diğer modlarla uyumsuzdur
+ ve güncellemede bozulur. Bu nedenle siz de mod yaparken XNB dosyasını doğrudan değiştirmek
+ yerine, yukarıda anlattığımız Content Patcher ve SMAPI’nin content injection yöntemlerini
+ kullanmalısınız. Örneğin bir portre değiştirmek istiyorsanız, eskiden Portraits/Abigail.xnb
+ dosyasını değiştirirdiniz; şimdi ise Content Patcher paketi yaparak hedef dosyayı yüklüyorsunuz.
+ Bu sayede aynı portreyi değiştiren birden fazla mod varsa SMAPI bunları birleştirmeye veya
+ tercihe göre yüklemeye çalışır, en azından modları yönetmek kolaylaşır (aç kapa ile).
+ 186
+ Topluluk Kaynakları: Stardew Valley mod topluluğu oldukça aktif ve yardımsever. Stardew Valley
+ Discord sunucusunun modding kanalı, takıldığınız sorunlarda soru sorabileceğiniz bir yer. Ayrıca
+ resmi forumlarda (forums.stardewvalley.net) mod geliştirme bölümü var. Bazı mod yazarları
+ GitHub’da kodlarını açık kaynak paylaşıyor; benzer bir iş yapmak istediğinizde o modların koduna
+ bakarak fikir edinebilirsiniz. Örneğin Tractor Mod, Json Assets gibi popüler modlar açık kaynak. 
+Mod Yükleme Sıralaması ve Çakışmalar: SMAPI, Content Patcher patch’lerini belirli bir sırada
+ uyguluyor (daha spesifik modlar ve koşullar en sona). Bazı durumlarda modunuzun başka bir
+ moddan sonra gelmesi gerekebilir. Manifest’e 
+"UpdateKeys" yanında 
+"Dependencies" de
+ ekleyebilirsiniz. Örneğin modunuz Content Patcher Extended gerektiriyorsa bunu orada
+ belirtebilirsiniz. Veya bir modla bilinen uyuşmazlık varsa 
+"Conflicts" alanına yazabilirsiniz.
+ Kullanıcılar modları karıştırdığında logda conflict uyarısı çıkar. Bunu çok kullanmanız gerekmez
+ ama haberdar olun.
+ Test ve Sürümleme: Modunuzu geliştirdikten sonra farklı senaryoları test etmeyi unutmayın.
+ Örneğin yeni bir çiftlik haritası modu yaptıysanız hem tek oyunculu yeni oyun, hem co-op
+ oturum, hem çeşitli mevsimlerde kontrol edin. Log’da uyarı kalmasın, Content Patcher “patch not
+ applied” hatası yoksa modunuz büyük ölçüde hazır demektir. Sürüm numaralarını semver
+ (major.minor.patch) formatında tutun ve manifest’de doğru girin. Yeni sürümü yayımlarken
+ kullanıcılara değişiklikleri net yazın. NexusMods veya ModDrop gibi platformlara yüklerken de
+ dosya yapınızın (ör. Mods/YourMod/ altına doğru yerleştirme) düzgün olduğundan emin olun.
+ Bu rehberde Stardew Valley modlamanın belli başlı “Özel Konular”ını kapsamaya çalıştık. Özetlemek
+ gerekirse, SMAPI API referansı mod yazarken ihtiyaç duyacağınız tüm temel sınıfları ve olayları içeriyor– manifest hazırlama, event’lere abone olma, içerik yükleme, vs. Oyun temellerini anlamak (zaman,
+ koordinatlar, sınıflar) mod davranışını öngörmede yardımcı. NPC modlama en çok dosya isteyen kısım
+ 21
+ama tamamen veri odaklı olduğu için çeviri ve içerik desteğiyle zengin modlar üretmek mümkün.
+ Eşyalar ve tarım kısımları, oyuna yeni içerik katmanın bel kemiği; Json Assets gibi framework’ler bunu
+ kolaylaştırsa da, kendiniz de Content Patcher ile çok şey yapabilirsiniz. Haritalar ve lokasyonlar artık
+ eskisinden daha modüler, yeni bölgeler eklemek hiç olmadığı kadar kolaylaştı, ama iyi planlama ve test
+ gerektiriyor. Diğer sistemler de (binalar, görevler, mağazalar vb.) açıldığından, artık Stardew Valley
+ dünyasını kendi oyun alanınız gibi düşünebilir, hayalinizdeki içerikleri ekleyebilirsiniz.
+ Unutmayın, mod yapımı sabır ve dikkat ister. Küçük adımlarla ilerleyin, her özelliği ekledikten sonra
+ oyunda deneyin. Hatalarla karşılaşırsanız panik yapmayın; log çıktısını okuyup nerede sorun olduğunu
+ anlamaya çalışın. Gerekirse Stardew Valley modlama wikisine tekrar göz atın (bu dokümanı hazırlarken
+ oradaki teknik detaylara sık sık atıf yaptık – örneğin SMAPI etkinlik örneği için wiki’den kod çektik ,
+ veya NPC veri alanlarını oradan okuduk ). 
+Son olarak, modlarınızı paylaşırken mutlaka bir README (OkumaDosyası) veya açıklama yazın;
+ oyuncular modunuzun nasıl kullanılacağını bilsin. Eğer kaynak kodunuzu paylaşmak isterseniz
+ GitHub’da repo açabilirsiniz – topluluktaki diğer modcular kodunuzu inceleyip katkı sunabilir, ya da siz
+ ileride projeyi bırakırken bir başkası geliştirmeye devam edebilir. Stardew Valley’in yaratıcı ve paylaşımcı
+ mod ekosisteminde yerinizi alırken, siz de öğrendikçe yeni gelenlere yardımcı olabilirsiniz. Keyifli
+ modlamalar! 
+Kaynaklar:
+ SMAPI Modder’s Guide (Resmi Wiki) – Temel API referansı
+ Stardew Valley Wiki – Modding:Game Fundamentals (Oyun mekanikleri)
+ Stardew Valley Wiki – Modding:NPC Data (Özel NPC oluşturma rehberi)
+ Stardew Valley Wiki – Modding:Dialogue (Diyalog formatı ve örnekleri)
+ Stardew Valley Wiki – Modding:Gift Taste Data (Hediye tercihleri veri yapısı)
+ Stardew Valley Wiki – Modding:Custom Weddings (Evlilik eventleri)
+ Stardew Valley Wiki – Modding:Items (Eşya türleri ve ID sistemi)
+ Stardew Valley Wiki – Modding:Crops Data (Mahsul veri örneği)
+ Stardew Valley Wiki – Modding:Machines (Makine veri formatı detayları)
+ Stardew Valley Wiki – Modding:Item Queries (Dinamik eşya sorguları açıklaması)
+ Stardew Valley Wiki – Modding:Farm Type Data (Yeni çiftlik ekleme rehberi)
+ Stardew Valley Wiki – Modding:World Map (Dünya haritası modlama)
+ Stardew Valley Wiki – Modding:Buildings (Çiftlik binaları veri yapısı)
+ Stardew Valley Wiki – Modding:Common Tasks (SMAPI ile sık yapılan işler, örnek kodlar)
+ SMAPI Documentation ve smapi.io – SMAPI Logları, Content Patcher şartları ve araçları (çeşitli). 
+Modding:Modder Guide/APIs - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Modder_Guide/APIs
+ Modding:Modder Guide/APIs/Events - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Modder_Guide/APIs/Events
+ Modding:Modder
+ Guide/Game Fundamentals - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Modder_Guide/Game_Fundamentals
+ Modding:Common tasks - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Common_tasks
+ 2
+ 42
+ • 1 2
+ • 187 26
+ • 42 48
+ • 188 189
+ • 65 66
+ • 68
+ • 75 82
+ • 190 191
+ • 192 114
+ • 132 136
+ • 140 147
+ • 193 158
+ • 194 180
+ • 195 32
+ • 
+1 5 8 9 11 12 16
+ 2 3 4 6 7 10
+ 13 14 15 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 33 34 35 36 187
+ 32 195
+ 22
+Modding:NPC data - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:NPC_data
+ Modding:Dialogue - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Dialogue
+ Modding:Tokenizable strings - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Tokenizable_strings
+ Modding:Schedule data - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Schedule_data
+ Modding:Gift taste data - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Gift_taste_data
+ Modding:Custom wedding events - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Custom_wedding_events
+ Modding:Event data - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Event_data
+ Modding:Items - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Items
+ Modding:Crop data - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Crop_data
+ Modding:Wild trees - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Wild_trees
+ Modding:Machines 
+Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Machines
+ Modding:Recipe data - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Recipe_data
+ Modding:Giant crops - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Giant_crops
+ Modding:Item queries - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Item_queries
+ Modding:Farm data - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Farm_data
+ Modding:World map - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:World_map
+ Modding:Buildings - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Buildings
+ Modding:Index - Stardew Valley Wiki
+ https://stardewvalleywiki.com/Modding:Index
+ 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53
+ 54 55 56 57 58 188 189
+ 59
+ 60 61 62
+ 63 64 65 66
+ 67 68 69 70
+ 71 72
+ 73 74 75 76 77 78 79 80 81 82 83 84 85
+ 86 87 88 89 90 91 92 190 191
+ 93 94 95 96 97 98 99
+ 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 192
+ 120 121
+ 122 123 124 125 126 127 128 129 130
+ 131 132 133 134 135 136 137 138
+ 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154
+ 155 156 157 158 159 160 161 162 193
+ 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 194
+ 185 186
+ 23
